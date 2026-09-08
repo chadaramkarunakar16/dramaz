@@ -422,10 +422,12 @@ function renderScenes(scenes) {
         <span class="shot-type">${s.shot_type}</span>
       </div>
       <p class="description">${s.description}</p>
-      <p class="prompt-row"><span class="prompt-label">Image</span>${s.image_prompt}</p>
-      <p class="prompt-row"><span class="prompt-label">Video</span>${s.video_prompt}</p>
-      <div class="model-tags">
+      <div class="prompt-block">
+        <p class="prompt-row"><span class="prompt-label">Image</span>${s.image_prompt}</p>
         <span class="model-tag">🖼 ${s.recommended_image_model}</span>
+      </div>
+      <div class="prompt-block">
+        <p class="prompt-row"><span class="prompt-label">Video</span>${s.video_prompt}</p>
         <span class="model-tag">🎬 ${s.recommended_video_model}</span>
       </div>
       <p class="direction">${s.direction}</p>

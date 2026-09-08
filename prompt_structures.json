@@ -1,0 +1,140 @@
+{
+  "_purpose": "Reference library for building detailed, structured AI image/video prompts. Distilled from AI Video Bootcamp course materials (camera movement catalogue, camera-as-language guide, color grading reference, contrast/realism trick guide, AI video generation settings guide) plus a large sample of professional-grade prompt examples. Used to ground the /episode Gemini prompt so scene prompts are structured and specific instead of one-liners.",
+
+  "image_prompt_anatomy": {
+    "description": "A strong image prompt is a short paragraph, not a single sentence. Build it from these components in roughly this order, only including what's relevant to the scene:",
+    "components": [
+      "Subject and action: who/what, doing what, in one clear beat (one action, not several stacked together)",
+      "Camera position and shot size: angle (eye-level/low/high/dutch/frontal/three-quarter/profile/over-the-shoulder/POV) + shot size (extreme wide/wide/full/medium/close-up/extreme close-up)",
+      "Lens and depth of field: focal length in mm and what it does to the space, aperture (f-stop) and what stays sharp vs blurred",
+      "Lighting: direction, quality (hard/soft), source (window, practical lamp, overcast sky, neon, firelight), and what it does to the subject",
+      "Texture and realism detail: skin pores, fabric weave, imperfections, sweat/moisture, wear on props/clothing — concrete physical detail beats generic adjectives",
+      "Environment and background layers: foreground / midground / background described separately when the scene has depth",
+      "Camera/format reference: a real camera body or film stock when it helps set the character (see camera_bodies below)",
+      "Color grading: one mood-to-palette formula (see color_grading below), placed near the end",
+      "Composition note: what the frame emphasizes, where the subject sits (rule of thirds, centered, negative space)",
+      "Quality tag: photorealistic / cinematic / 8k / ultra-detailed — one short tag, not a paragraph"
+    ],
+    "rule": "Prefer concrete, specific physical detail over generic superlatives. 'visible pores, a thin scar at the hairline, faint sunburn across the shoulders' beats 'flawless beautiful skin'. One clear subject action beats several stacked actions."
+  },
+
+  "video_prompt_anatomy": {
+    "description": "A video prompt describes MOTION on top of the image, using the six-slot camera movement template. Keep it to ONE main subject movement and ONE main camera movement per scene — stacking multiple movements causes AI video models to glitch or morph.",
+    "six_slot_template": {
+      "movement": "The move by name and what it rides on (rails, shoulder, crane, drone, fixed tripod).",
+      "start": "How it begins — locked frame, or already moving on frame one.",
+      "speed": "The curve — ease in, build, decelerate, constant, violent, or creeping.",
+      "framing": "What stays stable while everything else changes (camera height, subject centering, horizon level).",
+      "end": "The final frame and the hold, or an exit still in motion.",
+      "time": "Real time, normal speed, no slow motion — unless the scene specifically calls for a time effect (freeze/bullet-time)."
+    },
+    "rule": "Never leave a decision to the model. Name the exact movement, its start state, its speed curve, what stays fixed, and how it ends. Do not just say 'slow push-in' — that names only the pace."
+  },
+
+  "camera_movements": [
+    { "name": "Static Shot", "group": "Camera Stays Put", "use_it": "a face about to break, two people at a table, clean cut into next shot" },
+    { "name": "Pan", "group": "Camera Stays Put", "use_it": "follow someone crossing a room, carry attention from one thing to another" },
+    { "name": "Tilt", "group": "Camera Stays Put", "use_it": "introduce a character in pieces, boots to face" },
+    { "name": "Whip Pan", "group": "Camera Stays Put", "use_it": "reactions, reveals, comedic beats, invisible transitions" },
+    { "name": "Dolly In", "group": "Closer and Further", "use_it": "the moment something changes inside a person: a realization, a decision" },
+    { "name": "Dolly Out", "group": "Closer and Further", "use_it": "isolation, endings, and the reveal of what else is in the room" },
+    { "name": "Zoom In / Out", "group": "Closer and Further", "use_it": "tighten the frame without moving the audience through space" },
+    { "name": "Slow Zoom", "group": "Closer and Further", "use_it": "monologues, dread, a slow realization" },
+    { "name": "Fast Zoom", "group": "Closer and Further", "use_it": "a sudden discovery, a reality check" },
+    { "name": "Crash Zoom In", "group": "Closer and Further", "use_it": "comedic beats, sudden overwhelming realizations" },
+    { "name": "Crash Zoom Out", "group": "Closer and Further", "use_it": "comedy or shock: reveal the full context around a calm face" },
+    { "name": "Truck", "group": "Traveling Past", "use_it": "unfold a space piece by piece, the environment is the subject" },
+    { "name": "Slider", "group": "Traveling Past", "use_it": "tabletops, interiors, product shots, subtle foreground parallax" },
+    { "name": "Pedestal", "group": "Traveling Past", "use_it": "rise from evidence on a desk to the face reading it" },
+    { "name": "Push Past", "group": "Traveling Past", "use_it": "enter a scene through a doorframe/foreground object instead of cutting in" },
+    { "name": "Arc", "group": "Around", "use_it": "reveal another person or angle entering the frame, a quarter/half turn" },
+    { "name": "Orbit", "group": "Around", "use_it": "the whole world around the subject is worth showing; end on something new" },
+    { "name": "Spiral", "group": "Around", "use_it": "circling that closes toward one destination — obsession or release" },
+    { "name": "Follow From Behind", "group": "Tracking", "use_it": "walking into the unknown — a corridor, a crowd, a door ahead" },
+    { "name": "Reverse Tracking", "group": "Tracking", "use_it": "determination — someone who has decided and is on the way" },
+    { "name": "Side Tracking", "group": "Tracking", "use_it": "journeys, athletes, distance-covered montage beats" },
+    { "name": "Low Tracking Shot", "group": "Tracking", "use_it": "introductions that keep mystery, face never shown" },
+    { "name": "Vehicle Tracking", "group": "Tracking", "use_it": "when speed itself is the story — the escape, the chase" },
+    { "name": "Chase Shot", "group": "Tracking", "use_it": "panic, escape, pursuit — framing slips and corrects" },
+    { "name": "Handheld Shot", "group": "The Human Camera", "use_it": "scenes that should feel witnessed: arguments, horror, raw moments" },
+    { "name": "Reactive Snap Zoom", "group": "The Human Camera", "use_it": "action bursting into frame, or a comedic snap onto a face" },
+    { "name": "Snorricam", "group": "The Human Camera", "use_it": "panic, drunkenness, a mind coming apart — world spins around a locked face" },
+    { "name": "Crane Up / Down", "group": "The Air", "use_it": "endings, openings, a life meeting the scale of the world" },
+    { "name": "Drone Shot", "group": "The Air", "use_it": "geography and scale, where this story lives" },
+    { "name": "Fly-Through", "group": "The Air", "use_it": "connect outside and inside through one opening, no cut" },
+    { "name": "FPV Dive", "group": "The Air", "use_it": "adrenaline — the drop, the pursuit" },
+    { "name": "Dolly Zoom", "group": "The Impossible", "use_it": "the moment reality shifts — the diagnosis, the betrayal" },
+    { "name": "Bullet Time", "group": "The Impossible", "use_it": "the one decisive frozen instant — impact, leap, collision" }
+  ],
+
+  "shot_sizes": [
+    { "name": "extreme wide", "reads": "the environment becomes the real subject" },
+    { "name": "wide shot", "reads": "person and place read together" },
+    { "name": "full shot", "reads": "posture, outfit, silhouette, stance" },
+    { "name": "medium shot", "reads": "natural conversation distance" },
+    { "name": "close-up", "reads": "emotion, eyes, breath, tiny changes" },
+    { "name": "extreme close-up", "reads": "one critical detail only" }
+  ],
+
+  "camera_angles": [
+    { "name": "eye level", "effect": "honest, equal" },
+    { "name": "low angle", "effect": "powerful, heroic, or threatening" },
+    { "name": "high angle", "effect": "vulnerable, exposed, or small" },
+    { "name": "dutch angle", "effect": "unstable, wrong" },
+    { "name": "frontal", "effect": "direct, confrontational" },
+    { "name": "three-quarter", "effect": "natural, cinematic, dimensional" },
+    { "name": "profile", "effect": "distant, thoughtful, closed off" },
+    { "name": "over-the-shoulder", "effect": "conversation, power dynamics" },
+    { "name": "POV", "effect": "camera becomes the character's eyes" }
+  ],
+
+  "lenses": [
+    { "mm": "16-24mm", "type": "wide", "effect": "deep, immersive space, good for interiors/POV/action" },
+    { "mm": "35mm", "type": "wide-normal", "effect": "slightly deep, versatile establishing/character lens" },
+    { "mm": "40-50mm", "type": "normal", "effect": "calm, close to human vision" },
+    { "mm": "85mm", "type": "portrait", "effect": "narrower, strong subject separation" },
+    { "mm": "135-200mm", "type": "telephoto", "effect": "compressed, distant, stacked background planes" }
+  ],
+
+  "camera_bodies": [
+    { "name": "ARRI Alexa", "look": "serious drama, soft highlight rolloff, all-round cinema look" },
+    { "name": "Sony Venice 2", "look": "clean night and low-light work" },
+    { "name": "RED V-Raptor", "look": "sharp, modern, action-friendly digital cinema" },
+    { "name": "Hasselblad / medium format", "look": "glossy premium product and luxury surface look" }
+  ],
+
+  "color_grading": {
+    "formula": "[scene description] + [lighting source] + [one color grade mood] + [film reference if useful] — placed near the end of the prompt. Never say just 'colorful'; name the exact colors. Pick one mood, not several stacked together.",
+    "moods": [
+      { "mood": "epic / heroic", "palette": "rich golds, deep blues, warm highlights, cool shadows" },
+      { "mood": "dark / moody", "palette": "desaturated, heavy shadows, teal and orange undertones" },
+      { "mood": "romantic / dreamy", "palette": "soft pinks, warm gold tones, slight haze" },
+      { "mood": "horror / unsettling", "palette": "cold greens, sickly yellows, high contrast, crushed blacks" },
+      { "mood": "sci-fi / cyberpunk", "palette": "neon blues and magentas against dark backgrounds" },
+      { "mood": "vintage / nostalgic", "palette": "faded colors, warm yellows, lifted blacks, film grain" },
+      { "mood": "clean / corporate", "palette": "bright, slightly cool, high key, minimal shadows" },
+      { "mood": "nature / documentary", "palette": "rich greens, warm earth tones, natural saturation" },
+      { "mood": "melancholy / lonely", "palette": "desaturated blue-grey, cold tones, overcast feel" },
+      { "mood": "high energy / action", "palette": "high contrast, punchy saturation, warm with cool accents" },
+      { "mood": "luxury / elegant", "palette": "deep blacks, gold accents, warm highlights, rich contrast" },
+      { "mood": "surreal / dreamlike", "palette": "unnatural color shifts, pastels mixed with deep tones" }
+    ],
+    "film_references": [
+      "Blade Runner 2049: heavy orange and teal, smoky atmosphere, neon in darkness",
+      "Mad Max: Fury Road: crushed teal shadows, blazing orange/amber highlights, extreme contrast",
+      "The Matrix: green tint throughout, dark shadows, desaturated except green",
+      "Wes Anderson: pastel color blocking, symmetrical, warm vintage tones",
+      "Ozark / Gone Girl: cold steel blue, desaturated, flat, oppressive",
+      "John Wick: deep neon blue and red against pitch black, high contrast",
+      "Dune: warm amber and sand tones, hazy atmosphere, desaturated blues",
+      "The Revenant: cold natural light, blue-grey shadows, raw and earthy"
+    ]
+  },
+
+  "realism_notes": [
+    "AI footage defaults to looking too clean: too much contrast, too saturated, too stable. For grounded/realistic (non-glossy) scenes, describe softer natural light, natural skin texture with visible pores/imperfections, and avoid words like 'flawless' or 'perfect'.",
+    "One main subject movement and one main camera movement per scene is the ceiling — stacked motion breaks AI video models.",
+    "Real, concrete physical detail (a scar, sweat, fabric wear, a stray hair) reads as more realistic than piled-on generic beauty adjectives.",
+    "Never invent a video/image model — only recommend models that appear in the routing table."
+  ]
+}

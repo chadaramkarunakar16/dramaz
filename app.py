@@ -15,6 +15,9 @@ with open("routing_table.json") as f:
 with open("style_library.json") as f:
     STYLE_LIBRARY = json.load(f)
 
+with open("prompt_structures.json") as f:
+    PROMPT_STRUCTURES = json.load(f)
+
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 PARALLEL_API_KEY = os.environ["PARALLEL_API_KEY"]
 
@@ -361,6 +364,9 @@ def episode():
         """
 
     prompt = f"""
+    You are a cinematographer and prompt engineer building production-ready
+    AI image and video generation prompts for a micro-drama episode.
+
     Season plan: {json.dumps(season_data)}
     Write the full scene-by-scene breakdown for episode {episode_number} only.
     {refinement_block}
@@ -375,9 +381,31 @@ def episode():
     For each scene, classify it with a shot_type key chosen ONLY from this
     exact list (use the key exactly as written): {json.dumps(shot_type_keys)}
 
-    For each scene return: scene_number, description (one line), image_prompt,
-    video_prompt, shot_type (must be one of the keys above), and direction
-    (one line of director-style shot direction using the styles above).
+    PROMPT-WRITING REFERENCE — use this to build image_prompt and video_prompt.
+    Do not just name these concepts; actually apply specific chosen values
+    (an exact focal length, an exact lighting direction, an exact color
+    palette, an exact camera movement) so every prompt reads as a real,
+    structured production prompt rather than a vague one-liner:
+    {json.dumps(PROMPT_STRUCTURES)}
+
+    Requirements for image_prompt (3-5 sentences, following image_prompt_anatomy
+    above): describe the subject/action, camera angle + shot size, lens focal
+    length and what it does to the space, lighting direction and quality,
+    concrete texture/realism detail, the background in layers if the scene has
+    depth, optionally a camera body reference, and end with one color-grading
+    mood from the reference matched to this scene's tone. Do not pad with
+    generic superlatives — every clause should be a concrete, specific choice.
+
+    Requirements for video_prompt (2-4 sentences, following video_prompt_anatomy
+    and the six_slot_template above): pick exactly ONE camera movement from the
+    camera_movements list and describe it using the six slots (movement, start,
+    speed, framing, end, time) in prose, plus the ONE main subject movement this
+    scene needs. Never stack multiple camera movements or multiple subject
+    actions in one video_prompt.
+
+    For each scene return: scene_number, description (one line story beat),
+    image_prompt, video_prompt, shot_type (must be one of the keys above), and
+    direction (one line of director-style shot direction using the styles above).
     Return as a JSON list of scenes.
     """
     try:
