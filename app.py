@@ -27,7 +27,86 @@ parallel_client = Parallel(api_key=PARALLEL_API_KEY)
 
 # High temperature so repeated generations for the same seed genuinely vary
 # (director/character/scene choices) instead of converging on one "safest" answer.
-CREATIVE_CONFIG = {"response_mime_type": "application/json", "temperature": 1.35}
+# response_schema strictly enforces the exact JSON shape (array vs object, field
+# names) regardless of temperature, so the frontend never gets a shape it can't render.
+def creative_config(schema):
+    return {"response_mime_type": "application/json", "temperature": 1.35, "response_schema": schema}
+
+
+TRENDS_SCHEMA = {
+    "type": "ARRAY",
+    "minItems": 5,
+    "maxItems": 5,
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "niche": {"type": "STRING"},
+            "seed": {"type": "STRING"},
+            "source_url": {"type": "STRING"},
+        },
+        "required": ["niche", "seed", "source_url"],
+    },
+}
+
+CONCEPT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "logline": {"type": "STRING"},
+        "core_conflict": {"type": "STRING"},
+        "characters": {
+            "type": "ARRAY",
+            "minItems": 2,
+            "maxItems": 6,
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "role": {"type": "STRING"},
+                    "arc": {"type": "STRING"},
+                    "visual_description": {"type": "STRING"},
+                },
+                "required": ["name", "role", "arc", "visual_description"],
+            },
+        },
+        "locations": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "style_blend": {
+            "type": "OBJECT",
+            "properties": {
+                "director_id": {"type": "STRING"},
+                "cinematographer_id": {"type": "STRING"},
+                "reason": {"type": "STRING"},
+            },
+            "required": ["director_id", "cinematographer_id", "reason"],
+        },
+    },
+    "required": ["logline", "core_conflict", "characters", "locations", "style_blend"],
+}
+
+SEASON_ITEM_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "episode_number": {"type": "INTEGER"},
+        "hook": {"type": "STRING"},
+        "cliffhanger": {"type": "STRING"},
+    },
+    "required": ["episode_number", "hook", "cliffhanger"],
+}
+
+SCENE_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "scene_number": {"type": "INTEGER"},
+            "description": {"type": "STRING"},
+            "image_prompt": {"type": "STRING"},
+            "video_prompt": {"type": "STRING"},
+            "shot_type": {"type": "STRING"},
+            "direction": {"type": "STRING"},
+        },
+        "required": ["scene_number", "description", "image_prompt", "video_prompt", "shot_type", "direction"],
+    },
+}
 
 
 def get_style_by_id(style_id):
@@ -37,12 +116,17 @@ def get_style_by_id(style_id):
     return None
 
 
+API_ROUTES = {"/trends", "/concept", "/season", "/episode"}
+
+
 @app.after_request
 def add_no_cache_headers(response):
-    # These routes call live AI APIs; every request should hit them fresh,
-    # never get served a stale cached response from the browser or a proxy.
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
+    # Only the AI-backed API routes need this — every request should hit the
+    # live APIs fresh, never get served a stale cached response. Static assets
+    # (background image, logo, css/js) should still cache normally.
+    if request.path in API_ROUTES:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 
@@ -109,7 +193,7 @@ def trends():
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            config=CREATIVE_CONFIG,
+            config=creative_config(TRENDS_SCHEMA),
         )
         trends_data = json.loads(response.text)
         return jsonify(trends_data)
@@ -137,6 +221,7 @@ def concept():
         prev_director = (previous.get("style_blend") or {}).get("director_id")
         prev_cinematographer = (previous.get("style_blend") or {}).get("cinematographer_id")
         prev_names = [c.get("name") for c in (previous.get("characters") or [])]
+        prev_char_count = len(previous.get("characters") or [])
         variation_block = f"""
         A previous version was already generated for this seed:
         {json.dumps(previous)}
@@ -146,6 +231,8 @@ def concept():
           DIFFERENT director/cinematographer pairing than director_id
           "{prev_director}" and cinematographer_id "{prev_cinematographer}".
         - Use different character names than: {", ".join(n for n in prev_names if n)}.
+        - Use a DIFFERENT number of characters than the previous version's
+          {prev_char_count} — do not default to the same headcount every time.
         - Change the specific plot mechanics, locations, and relationships —
           keep only the core niche/seed, not the previous story's details.
         """
@@ -164,8 +251,14 @@ def concept():
 
     Then create:
     - a one-line logline and core conflict
-    - a character sheet: name, role, one-line arc, visual description
-      (only as many characters as the story truly needs)
+    - a character sheet: name, role, one-line arc, visual description.
+      Include as many characters as the story genuinely needs — do not
+      default to a fixed number out of habit. A simple two-hander romance
+      might only need 2, but most stories benefit from 3-5 (protagonist,
+      antagonist or rival, love interest, ally, family member, etc. as
+      relevant). Let the story's complexity decide the count, and vary it
+      naturally across different concepts rather than always landing on
+      the same number.
     - a list of locations/environments
 
     Return as JSON with fields: logline, core_conflict, characters, locations,
@@ -175,7 +268,7 @@ def concept():
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            config=CREATIVE_CONFIG,
+            config=creative_config(CONCEPT_SCHEMA),
         )
         concept_data = json.loads(response.text)
 
@@ -222,11 +315,17 @@ def season():
     Return as a JSON list with fields: episode_number, hook, cliffhanger.
     The list must contain exactly {episode_count} items, numbered 1 to {episode_count}.
     """
+    season_schema = {
+        "type": "ARRAY",
+        "minItems": episode_count,
+        "maxItems": episode_count,
+        "items": SEASON_ITEM_SCHEMA,
+    }
     try:
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            config=CREATIVE_CONFIG,
+            config=creative_config(season_schema),
         )
         season_data = json.loads(response.text)
         return jsonify(season_data)
@@ -285,20 +384,20 @@ def episode():
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            config=CREATIVE_CONFIG,
+            config=creative_config(SCENE_SCHEMA),
         )
         scenes = json.loads(response.text)
 
-        # Resolve the recommended model server-side from the routing table itself,
-        # rather than trusting the model to echo a value from it correctly.
+        # Resolve both recommended models server-side from the routing table
+        # itself, rather than trusting the model to echo values from it correctly.
         for scene in scenes:
             routing = ROUTING_TABLE.get(scene.get("shot_type"))
-            if routing:
-                scene["recommended_model"] = routing.get("video") or routing.get("fallback")
-            else:
+            if not routing:
                 scene["shot_type"] = "wide_establishing"
-                fallback_routing = ROUTING_TABLE.get("wide_establishing", {})
-                scene["recommended_model"] = fallback_routing.get("video", "Veo 3.1")
+                routing = ROUTING_TABLE.get("wide_establishing", {})
+            scene["recommended_image_model"] = routing.get("image", "Seedream 5.0 Pro")
+            scene["recommended_video_model"] = routing.get("video") or routing.get("fallback", "Veo 3.1")
+            scene["model_reason"] = routing.get("reason", "")
 
         return jsonify(scenes)
     except Exception as e:

@@ -424,7 +424,10 @@ function renderScenes(scenes) {
       <p class="description">${s.description}</p>
       <p class="prompt-row"><span class="prompt-label">Image</span>${s.image_prompt}</p>
       <p class="prompt-row"><span class="prompt-label">Video</span>${s.video_prompt}</p>
-      <span class="model-tag">${s.recommended_model}</span>
+      <div class="model-tags">
+        <span class="model-tag">🖼 ${s.recommended_image_model}</span>
+        <span class="model-tag">🎬 ${s.recommended_video_model}</span>
+      </div>
       <p class="direction">${s.direction}</p>
     `;
     sceneList.appendChild(card);

@@ -12,9 +12,11 @@
 </head>
 <body>
 
-<div class="app-shell">
+<div class="bg-photo"></div>
 
-  <aside class="rail">
+<div class="page">
+
+  <header class="top-bar">
     <div class="brand">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-128.png') }}" alt="Dramaz logo">
       <div>
@@ -22,54 +24,13 @@
         <div class="brand-sub">AI Micro-Drama Studio</div>
       </div>
     </div>
-
-    <nav class="stepper" id="stepper">
-      <button class="step" data-step="trends">
-        <span class="step-index">01</span>
-        <span class="step-info">
-          <span class="step-name">Trends</span>
-          <span class="step-status">Scout what's viral</span>
-        </span>
-        <span class="step-mark"></span>
-      </button>
-      <button class="step" data-step="concept" disabled>
-        <span class="step-index">02</span>
-        <span class="step-info">
-          <span class="step-name">Concept</span>
-          <span class="step-status">Logline, cast, world</span>
-        </span>
-        <span class="step-mark"></span>
-      </button>
-      <button class="step" data-step="season" disabled>
-        <span class="step-index">03</span>
-        <span class="step-info">
-          <span class="step-name">Season</span>
-          <span class="step-status">Episode arc</span>
-        </span>
-        <span class="step-mark"></span>
-      </button>
-      <button class="step" data-step="episode" disabled>
-        <span class="step-index">04</span>
-        <span class="step-info">
-          <span class="step-name">Episode</span>
-          <span class="step-status">Shot-by-shot kit</span>
-        </span>
-        <span class="step-mark"></span>
-      </button>
-    </nav>
-
-    <div class="rail-footer">
-      <span class="ratio-chip">9:16</span>
-      <span>Vertical-first · AI-native</span>
-    </div>
-  </aside>
+  </header>
 
   <main class="stage">
 
     <!-- STEP 1: TRENDS -->
     <section class="stage-panel active" data-panel="trends">
       <div class="panel-header">
-        <span class="eyebrow">Step 01 / 04</span>
         <h1>Scout what's trending</h1>
         <p class="lede">Pull live signal from micro-drama platforms, then pick the seed — or seeds — worth building a series on.</p>
       </div>
@@ -97,7 +58,6 @@
     <!-- STEP 2: CONCEPT -->
     <section class="stage-panel" data-panel="concept">
       <div class="panel-header">
-        <span class="eyebrow">Step 02 / 04</span>
         <h1>Shape the concept</h1>
         <p class="lede">Logline, cast, and world — built from your approved trend seed.</p>
       </div>
@@ -132,7 +92,6 @@
     <!-- STEP 3: SEASON -->
     <section class="stage-panel" data-panel="season">
       <div class="panel-header">
-        <span class="eyebrow">Step 03 / 04</span>
         <h1>Plan the season</h1>
         <p class="lede">One minute per episode. Every one ends on a hook that forces the next.</p>
       </div>
@@ -158,7 +117,6 @@
     <!-- STEP 4: EPISODE -->
     <section class="stage-panel" data-panel="episode">
       <div class="panel-header">
-        <span class="eyebrow">Step 04 / 04</span>
         <h1>Episode kit</h1>
         <p class="lede">Scene-by-scene shot list, ready for production.</p>
       </div>
