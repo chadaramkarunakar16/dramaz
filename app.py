@@ -1,0 +1,229 @@
+import os
+import json
+
+from dotenv import load_dotenv
+from flask import Flask, jsonify, render_template, request
+
+load_dotenv()
+
+app = Flask(__name__)
+
+with open("routing_table.json") as f:
+    ROUTING_TABLE = json.load(f)
+
+with open("style_library.json") as f:
+    STYLE_LIBRARY = json.load(f)
+
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+PARALLEL_API_KEY = os.environ["PARALLEL_API_KEY"]
+
+from google import genai
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_MODEL = "gemini-3.1-flash-lite"
+
+from parallel import Parallel
+parallel_client = Parallel(api_key=PARALLEL_API_KEY)
+
+
+def get_style_by_id(style_id):
+    for s in STYLE_LIBRARY:
+        if s["id"] == style_id:
+            return s
+    return None
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/trends", methods=["GET"])
+def trends():
+    refine = (request.args.get("refine") or "").strip()
+
+    objective = (
+        "Find what is currently going viral in AI micro-dramas: vertical, "
+        "short-episode series on platforms like ReelShort, DramaBox, ShortMax, "
+        "and viral drama-style content in Instagram/Facebook ads and posts."
+    )
+    search_queries = [
+        "AI micro drama trending",
+        "viral vertical drama app episodes",
+        "ReelShort DramaBox trending tropes",
+    ]
+    if refine:
+        objective += f" Focus specifically on: {refine}."
+        search_queries.append(refine)
+
+    try:
+        search_result = parallel_client.search(
+            objective=objective,
+            search_queries=search_queries,
+        )
+        excerpts_text = "\n\n".join(
+            f"{r.url}: {' '.join(r.excerpts)}" for r in search_result.results
+        )
+
+        prompt = f"""
+        Here are raw web search excerpts about what's trending in AI micro-dramas:
+        {excerpts_text}
+
+        From these, extract 5 trending niches or tropes right now, each with a
+        one-line concept seed and the source URL it came from.
+        Return as a JSON list with fields: niche, seed, source_url.
+        """
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        trends_data = json.loads(response.text)
+        return jsonify(trends_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def get_style_shortlist():
+    return [{"id": s["id"], "name": s["name"], "category": s["category"], "tags": s["tags"]} for s in STYLE_LIBRARY]
+
+
+@app.route("/concept", methods=["POST"])
+def concept():
+    data = request.get_json(silent=True) or {}
+    seeds = data.get("seeds") or ([data["seed"]] if data.get("seed") else [])
+    combined_seed = " | ".join(seeds)
+    note = data.get("note")
+    shortlist = get_style_shortlist()
+
+    refinement_block = f'\nThe user reviewed a previous version and asked for this change: "{note}"' if note else ""
+
+    prompt = f"""
+    You are a micro-drama creative director.
+    Niche/concept seed(s): "{combined_seed}"
+    {refinement_block}
+
+    Available cinematic styles (id, name, category, tags):
+    {json.dumps(shortlist)}
+
+    Pick exactly one "director" style and one "cinematographer" style that
+    best fit this story's tone, and explain why in one line.
+
+    Then create:
+    - a one-line logline and core conflict
+    - a character sheet: name, role, one-line arc, visual description
+      (only as many characters as the story truly needs)
+    - a list of locations/environments
+
+    Return as JSON with fields: logline, core_conflict, characters, locations,
+    style_blend: {{ director_id, cinematographer_id, reason }}
+    """
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        concept_data = json.loads(response.text)
+
+        style_blend = concept_data.get("style_blend", {})
+        director = get_style_by_id(style_blend.get("director_id"))
+        cinematographer = get_style_by_id(style_blend.get("cinematographer_id"))
+        style_blend["director_name"] = director["name"] if director else style_blend.get("director_id")
+        style_blend["cinematographer_name"] = cinematographer["name"] if cinematographer else style_blend.get("cinematographer_id")
+        concept_data["style_blend"] = style_blend
+
+        return jsonify(concept_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/season", methods=["POST"])
+def season():
+    data = request.get_json(silent=True) or {}
+    concept_data = data.get("concept")
+    episode_count = int(data.get("episode_count", 20))
+    note = data.get("note")
+
+    refinement_block = f'\nThe user reviewed a previous version and asked for this change: "{note}"' if note else ""
+
+    prompt = f"""
+    Approved concept: {json.dumps(concept_data)}
+    Write a {episode_count}-episode season plan. Each episode is 1 minute.
+    {refinement_block}
+    For each episode: episode number, a one-line hook, and a cliffhanger note
+    explaining exactly what unresolved moment forces the viewer into the next episode.
+    Return as a JSON list with fields: episode_number, hook, cliffhanger.
+    The list must contain exactly {episode_count} items, numbered 1 to {episode_count}.
+    """
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        season_data = json.loads(response.text)
+        return jsonify(season_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/episode", methods=["POST"])
+def episode():
+    data = request.get_json(silent=True) or {}
+    season_data = data.get("season")
+    episode_number = data.get("episode_number", 1)
+    style_blend = data.get("style_blend") or {}
+    note = data.get("note")
+
+    director_style = get_style_by_id(style_blend.get("director_id"))
+    cinematographer_style = get_style_by_id(style_blend.get("cinematographer_id"))
+    shot_type_keys = list(ROUTING_TABLE.keys())
+
+    refinement_block = f'\nThe user reviewed a previous version and asked for this change: "{note}"' if note else ""
+
+    prompt = f"""
+    Season plan: {json.dumps(season_data)}
+    Write the full scene-by-scene breakdown for episode {episode_number} only.
+    {refinement_block}
+
+    NARRATIVE / DIRECTOR STYLE ({director_style['name'] if director_style else 'unspecified'}):
+    {director_style['prompt'] if director_style else ''}
+
+    VISUAL / CINEMATOGRAPHER STYLE ({cinematographer_style['name'] if cinematographer_style else 'unspecified'}):
+    {cinematographer_style['prompt'] if cinematographer_style else ''}
+
+    For each scene, classify it with a shot_type key chosen ONLY from this
+    exact list (use the key exactly as written): {json.dumps(shot_type_keys)}
+
+    For each scene return: scene_number, description (one line), image_prompt,
+    video_prompt, shot_type (must be one of the keys above), and direction
+    (one line of director-style shot direction using the styles above).
+    Return as a JSON list of scenes.
+    """
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        scenes = json.loads(response.text)
+
+        # Resolve the recommended model server-side from the routing table itself,
+        # rather than trusting the model to echo a value from it correctly.
+        for scene in scenes:
+            routing = ROUTING_TABLE.get(scene.get("shot_type"))
+            if routing:
+                scene["recommended_model"] = routing.get("video") or routing.get("fallback")
+            else:
+                scene["shot_type"] = "wide_establishing"
+                fallback_routing = ROUTING_TABLE.get("wide_establishing", {})
+                scene["recommended_model"] = fallback_routing.get("video", "Veo 3.1")
+
+        return jsonify(scenes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)

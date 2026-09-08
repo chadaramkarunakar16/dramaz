@@ -1,0 +1,86 @@
+{
+  "fight_action": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Kling 3.0",
+    "fallback": "Seedance 2.5",
+    "reason": "Human motion and physical choreography"
+  },
+  "dialogue_close_up": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Veo 3.1",
+    "fallback": "Kling 3.0",
+    "reason": "Facial performance, speech and audio sync"
+  },
+  "wide_establishing": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Veo 3.1",
+    "fallback": "Seedance 2.5",
+    "reason": "Photorealistic environmental scale"
+  },
+  "emotional_slow_motion": {
+    "image": "Midjourney",
+    "video": "Veo 3.1",
+    "fallback": "Kling 3.0",
+    "reason": "Subtle performance and mood"
+  },
+  "crowd_group": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Seedance 2.5",
+    "fallback": "Wan 3.0",
+    "reason": "Many subjects plus continuity"
+  },
+  "night_low_light": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Veo 3.1",
+    "fallback": "Seedance 2.5",
+    "reason": "Realistic exposure and atmosphere"
+  },
+  "car_chase": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Kling 3.0",
+    "fallback": "Seedance 2.5",
+    "reason": "Fast motion and physical interaction"
+  },
+  "romance_intimacy": {
+    "image": "Midjourney",
+    "video": "Kling 3.0",
+    "fallback": "Veo 3.1",
+    "reason": "Facial and body-language nuance"
+  },
+  "sci_fi_fantasy": {
+    "image": "Midjourney",
+    "video": "Seedance 2.5",
+    "fallback": "Runway Gen-4.5",
+    "reason": "Worldbuilding plus reference continuity"
+  },
+  "horror_suspense": {
+    "image": "Midjourney",
+    "video": "Seedance 2.5",
+    "fallback": "Veo 3.1",
+    "reason": "Atmosphere plus environmental continuity"
+  },
+  "text_signage": {
+    "image": "GPT Image 2",
+    "video": "Seedance 2.5",
+    "fallback": "Runway Aleph 2.0",
+    "reason": "Generate exact graphics first, then animate/edit"
+  },
+  "vfx_repair": {
+    "image": "GPT Image 2",
+    "video": "Runway Aleph 2.0",
+    "fallback": "Seedance 2.5",
+    "reason": "Edit successful footage instead of regenerating it"
+  },
+  "long_single_take": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Seedance 2.5",
+    "fallback": "Kling 3.0",
+    "reason": "Long generation plus extension and references"
+  },
+  "camera_heavy_hero_shot": {
+    "image": "Seedream 5.0 Pro",
+    "video": "Runway Gen-4.5",
+    "fallback": "Seedance 2.5",
+    "reason": "Detailed camera choreography"
+  }
+}
