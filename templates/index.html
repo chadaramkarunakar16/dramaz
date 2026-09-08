@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +12,12 @@
 </head>
 <body>
 
+<div class="ambient" aria-hidden="true">
+  <span class="ambient-beam beam-a"></span>
+  <span class="ambient-beam beam-b"></span>
+  <span class="ambient-perf"></span>
+</div>
+
 <!-- ================= DASHBOARD VIEW ================= -->
 <div id="view-dashboard" class="view">
   <header class="dash-header">
@@ -23,7 +29,6 @@
       </div>
     </div>
     <div class="dash-actions">
-      <button class="icon-btn theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme"></button>
       <button id="btn-new-project" class="btn btn-primary">+ New Project</button>
     </div>
   </header>
@@ -68,7 +73,6 @@
     </nav>
 
     <div class="top-bar-right">
-      <button class="icon-btn theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme"></button>
       <button class="btn btn-ghost btn-sm" id="btn-all-projects">All Projects</button>
     </div>
   </header>
@@ -126,9 +130,12 @@
 
     <!-- ============ TRENDS ============ -->
     <section class="tab-panel" data-tab-panel="trends">
-      <div class="panel-header">
-        <h1>Scout what's trending</h1>
-        <p class="lede">Pull live signal from micro-drama platforms, then pick the seed — or seeds — worth building a series on.</p>
+      <div class="panel-header has-mark">
+        <canvas class="panel-mark" data-icon="radar" width="64" height="64"></canvas>
+        <div>
+          <h1>Scout what's trending</h1>
+          <p class="lede">Pull live signal from micro-drama platforms, then pick the seed — or seeds — worth building a series on.</p>
+        </div>
       </div>
 
       <div class="action-row">
@@ -153,9 +160,12 @@
 
     <!-- ============ SEASONS (concept + arc) ============ -->
     <section class="tab-panel" data-tab-panel="seasons">
-      <div class="panel-header">
-        <h1>Shape the season</h1>
-        <p class="lede">Concept first — logline, cast, world — then the episode-by-episode arc built on top of it.</p>
+      <div class="panel-header has-mark">
+        <canvas class="panel-mark" data-icon="board" width="64" height="64"></canvas>
+        <div>
+          <h1>Shape the season</h1>
+          <p class="lede">Concept first — logline, cast, world — then the episode-by-episode arc built on top of it.</p>
+        </div>
       </div>
 
       <div id="concept-section">
@@ -215,9 +225,12 @@
 
     <!-- ============ EPISODES ============ -->
     <section class="tab-panel" data-tab-panel="episodes">
-      <div class="panel-header">
-        <h1>Episode kit</h1>
-        <p class="lede">Scene-by-scene shot list, ready for production.</p>
+      <div class="panel-header has-mark">
+        <canvas class="panel-mark" data-icon="clapper" width="64" height="64"></canvas>
+        <div>
+          <h1>Episode kit</h1>
+          <p class="lede">Scene-by-scene shot list, ready for production.</p>
+        </div>
       </div>
 
       <div id="episode-progress" class="episode-progress"></div>
@@ -249,17 +262,26 @@
     </section>
 
     <!-- ============ OFFICE ============ -->
-    <section class="tab-panel" data-tab-panel="office">
-      <div class="panel-header">
-        <h1>The Office</h1>
-        <p class="lede">Every agent's desk — see who's working and who's waiting their turn.</p>
+    <section class="tab-panel office-panel" data-tab-panel="office">
+      <div class="office-head">
+        <div>
+          <h1>The Floor</h1>
+          <p class="lede">Your soundstage — every agent at its station, lit when it's working.</p>
+        </div>
+        <div class="office-legend">
+          <span><i class="legend-dot is-active"></i>Working</span>
+          <span><i class="legend-dot is-complete"></i>Done</span>
+          <span><i class="legend-dot"></i>Idle</span>
+        </div>
       </div>
-      <div class="office-board" id="office-board"></div>
+      <div class="office-stage" id="office-stage"></div>
     </section>
 
   </main>
 </div>
 
+<script src="{{ url_for('static', filename='js/vendor/three.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/scenes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

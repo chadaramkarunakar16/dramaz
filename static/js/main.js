@@ -5,7 +5,6 @@
 const STORAGE_KEYS = {
   index: "dramaz:projects",
   project: (id) => `dramaz:project:${id}`,
-  theme: "dramaz:theme",
 };
 
 function safeGetJSON(key, fallback) {
@@ -108,39 +107,6 @@ function deleteProject(id) {
   saveProjectIndex(loadProjectIndex().filter((p) => p.id !== id));
 }
 
-/* ============================================================
-   THEME
-   ============================================================ */
-
-function getTheme() {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.theme) || "dark";
-  } catch (e) {
-    return "dark";
-  }
-}
-
-const THEME_ICONS = {
-  sun: '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1v1.5M8 13.5V15M15 8h-1.5M2.5 8H1M12.6 3.4l-1 1M4.4 11.6l-1 1M12.6 12.6l-1-1M4.4 4.4l-1-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
-  moon: '<svg viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 106.9 7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
-};
-
-function setTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  try {
-    localStorage.setItem(STORAGE_KEYS.theme, theme);
-  } catch (e) {}
-  document.querySelectorAll(".theme-toggle-btn").forEach((btn) => {
-    btn.innerHTML = theme === "dark" ? THEME_ICONS.sun : THEME_ICONS.moon;
-    btn.title = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
-  });
-  if (state.activeTab === "studio") requestAnimationFrame(drawConnectors);
-}
-
-function toggleTheme() {
-  setTheme(getTheme() === "dark" ? "light" : "dark");
-}
-
 // Every API route can fail with a transient upstream error (e.g. the model
 // provider being overloaded), returned as {"error": "..."} with a non-2xx
 // status. Without this check, that error object gets treated as real data
@@ -221,6 +187,7 @@ function showDashboard(push) {
   currentProjectId = null;
   viewDashboard.classList.remove("hidden");
   viewProject.classList.add("hidden");
+  stopOffice();
   renderProjectGrid();
   document.title = "Dramaz — AI Micro-Drama Studio";
   if (push) history.pushState({ view: "dashboard" }, "", "/");
@@ -263,13 +230,6 @@ document.getElementById("btn-new-project").addEventListener("click", createAndOp
 document.getElementById("btn-new-project-empty").addEventListener("click", createAndOpenProject);
 document.getElementById("btn-all-projects").addEventListener("click", () => showDashboard(true));
 document.getElementById("rail-brand-btn").addEventListener("click", () => showDashboard(true));
-
-/* ============================================================
-   THEME TOGGLE BOOT
-   ============================================================ */
-
-setTheme(getTheme());
-document.querySelectorAll(".theme-toggle-btn").forEach((btn) => btn.addEventListener("click", toggleTheme));
 
 /* ============================================================
    DASHBOARD RENDERING
@@ -370,6 +330,7 @@ function goToTab(tab, skipPersist) {
   renderTabNav();
   if (tab === "studio") renderStudio();
   if (tab === "office") renderOffice();
+  else stopOffice();
   if (!skipPersist) persist();
 }
 
@@ -382,7 +343,7 @@ function setStepStatus(step, status) {
   renderTabNav();
   updateStudioNodeStates();
   if (state.activeTab === "studio") requestAnimationFrame(drawConnectors);
-  if (state.activeTab === "office") renderOffice();
+  if (state.activeTab === "office" && typeof OfficeScene !== "undefined") OfficeScene.refresh();
 }
 
 function unlockArcSection() {
@@ -481,29 +442,16 @@ window.addEventListener("resize", () => {
    OFFICE — agent presence board
    ============================================================ */
 
-const OFFICE_AGENTS = [
-  { key: "trends", name: "Trend Scout", role: "Live web research", icon: "📡" },
-  { key: "concept", name: "Concept Architect", role: "Logline, cast, world", icon: "🎭" },
-  { key: "season", name: "Season Planner", role: "Episode-by-episode arc", icon: "🗂" },
-  { key: "episode", name: "Episode Director", role: "Scene-by-scene kit", icon: "🎬" },
-];
-
+// The Office tab is a live Three.js soundstage (see scenes.js). It only
+// renders while the tab is on screen so it costs nothing in the background.
 function renderOffice() {
-  const board = document.getElementById("office-board");
-  if (!board) return;
-  board.innerHTML = OFFICE_AGENTS.map((a) => {
-    const status = state.stepStatus[a.key];
-    const cls = status === "active" ? "active" : status === "complete" ? "complete" : "";
-    const label = status === "active" ? "Working" : status === "complete" ? "Done" : "Idle";
-    return `
-      <div class="desk-card ${cls}">
-        <div class="desk-avatar">${a.icon}<span class="presence"></span></div>
-        <p class="desk-name">${a.name}</p>
-        <p class="desk-role">${a.role}</p>
-        <span class="desk-status">${label}</span>
-      </div>
-    `;
-  }).join("");
+  const stage = document.getElementById("office-stage");
+  if (!stage || typeof OfficeScene === "undefined") return;
+  OfficeScene.start(stage, () => state.stepStatus);
+}
+
+function stopOffice() {
+  if (typeof OfficeScene !== "undefined") OfficeScene.stop();
 }
 
 /* ============================================================
@@ -587,7 +535,7 @@ function rehydratePanels() {
 
   renderTabNav();
   updateStudioNodeStates();
-  renderOffice();
+  if (typeof OfficeScene !== "undefined") OfficeScene.refresh();
 }
 
 /* ================= STEP 1: TRENDS ================= */
@@ -997,7 +945,12 @@ btnApproveEpisode.addEventListener("click", () => {
    BOOT
    ============================================================ */
 
-(function initRouter() {
+(function boot() {
+  // Small rotating 3D marks on the Trends / Seasons / Episodes headers.
+  if (typeof initAccentIcon === "function") {
+    document.querySelectorAll(".panel-mark").forEach((c) => initAccentIcon(c, c.dataset.icon));
+  }
+
   const path = location.pathname;
   if (path.startsWith("/project/")) {
     showProject(decodeURIComponent(path.split("/project/")[1]), false);
