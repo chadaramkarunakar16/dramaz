@@ -138,6 +138,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/project/<project_id>")
+def project_page(project_id):
+    # Projects live in the browser's localStorage, not server-side — this route
+    # just serves the same shell so a saved/shared /project/<id> URL and the
+    # browser back/forward buttons work. The client reads the id from the URL.
+    return render_template("index.html")
+
+
 @app.route("/trends", methods=["GET"])
 def trends():
     refine = (request.args.get("refine") or "").strip()

@@ -14,9 +14,9 @@
 
 <div class="bg-photo"></div>
 
-<div class="page">
-
-  <header class="brand-corner">
+<!-- ================= DASHBOARD VIEW ================= -->
+<div id="view-dashboard" class="view">
+  <header class="dash-header">
     <div class="brand">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-128.png') }}" alt="Dramaz logo">
       <div>
@@ -24,132 +24,211 @@
         <div class="brand-sub">AI Micro-Drama Studio</div>
       </div>
     </div>
+    <div class="dash-actions">
+      <button class="icon-btn theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme"></button>
+      <button id="btn-new-project" class="btn btn-primary">+ New Project</button>
+    </div>
   </header>
 
-  <main class="stage">
+  <main class="dash-main">
+    <div class="dash-intro">
+      <h1>Your Projects</h1>
+      <p class="lede">Every micro-drama you build — saved in this browser, ready to pick back up.</p>
+    </div>
 
-    <!-- STEP 1: TRENDS -->
-    <section class="stage-panel active" data-panel="trends">
-      <div class="panel-header">
-        <h1>Scout what's trending</h1>
-        <p class="lede">Pull live signal from micro-drama platforms, then pick the seed — or seeds — worth building a series on.</p>
+    <div id="project-empty" class="empty-state hidden">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.4"/><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4" stroke="currentColor" stroke-width="1.2"/></svg>
       </div>
+      <h2>No projects yet</h2>
+      <p>Scout a trend, shape a concept, and generate a full episode kit — start to finish in minutes.</p>
+      <button class="btn btn-primary" id="btn-new-project-empty">+ New Project</button>
+    </div>
 
-      <div class="action-row">
-        <button id="btn-scout" class="btn btn-primary">
-          <span class="rec-dot"></span> Scout Trends
+    <div id="project-grid" class="project-grid"></div>
+  </main>
+</div>
+
+<!-- ================= PROJECT VIEW ================= -->
+<div id="view-project" class="view hidden">
+  <div class="project-shell">
+
+    <aside class="rail">
+      <div class="rail-top">
+        <button class="rail-brand" id="rail-brand-btn" title="All Projects">
+          <img class="brand-mark" src="{{ url_for('static', filename='img/logo-128.png') }}" alt="Dramaz logo">
+          <span class="brand-name">Dramaz</span>
+        </button>
+        <button class="rail-back" id="btn-all-projects">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          All Projects
         </button>
       </div>
 
-      <div id="trends-loading" class="loading hidden">Scanning the feed</div>
-      <div id="trends-grid" class="grid grid-trends"></div>
+      <div class="rail-project-title" id="rail-project-title">Untitled Project</div>
 
-      <div id="trends-refine-row" class="refine-row hidden">
-        <input type="text" id="trends-refine-input" placeholder="Refine the search — e.g. focus on werewolf romance">
-        <button id="btn-research-trends" class="btn btn-ghost">↻ Re-search</button>
+      <nav class="stepper" id="stepper">
+        <button class="step" data-step="trends">
+          <span class="step-mark"></span>
+          <span class="step-info">
+            <span class="step-name">Trends</span>
+            <span class="step-status">Scout what's viral</span>
+          </span>
+        </button>
+        <button class="step" data-step="concept" disabled>
+          <span class="step-mark"></span>
+          <span class="step-info">
+            <span class="step-name">Concept</span>
+            <span class="step-status">Logline, cast, world</span>
+          </span>
+        </button>
+        <button class="step" data-step="season" disabled>
+          <span class="step-mark"></span>
+          <span class="step-info">
+            <span class="step-name">Season</span>
+            <span class="step-status">Episode arc</span>
+          </span>
+        </button>
+        <button class="step" data-step="episode" disabled>
+          <span class="step-mark"></span>
+          <span class="step-info">
+            <span class="step-name">Episode</span>
+            <span class="step-status">Shot-by-shot kit</span>
+          </span>
+        </button>
+      </nav>
+
+      <div class="rail-footer">
+        <button class="icon-btn theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme"></button>
+        <span class="ratio-chip">9:16</span>
       </div>
+    </aside>
 
-      <div id="trends-approve-row" class="approve-row hidden">
-        <span id="trends-selected-count" class="selected-count">0 selected</span>
-        <button id="btn-approve-trends" class="btn btn-approve" disabled>Approve Selected →</button>
-      </div>
-    </section>
+    <main class="stage">
 
-    <!-- STEP 2: CONCEPT -->
-    <section class="stage-panel" data-panel="concept">
-      <div class="panel-header">
-        <h1>Shape the concept</h1>
-        <p class="lede">Logline, cast, and world — built from your approved trend seed.</p>
-      </div>
-
-      <div id="concept-source" class="source-banner hidden"></div>
-      <div id="concept-loading" class="loading hidden">Breaking the story</div>
-
-      <div id="concept-result" class="hidden">
-        <div class="logline-card">
-          <span class="label">Logline</span>
-          <p id="concept-logline"></p>
+      <!-- STEP 1: TRENDS -->
+      <section class="stage-panel active" data-panel="trends">
+        <div class="panel-header">
+          <h1>Scout what's trending</h1>
+          <p class="lede">Pull live signal from micro-drama platforms, then pick the seed — or seeds — worth building a series on.</p>
         </div>
-        <div id="style-dna-badge" class="style-badge"></div>
 
-        <h2 class="section-title">Character Sheet</h2>
-        <div id="character-grid" class="grid grid-characters"></div>
-
-        <h2 class="section-title">Locations</h2>
-        <ul id="locations-list" class="locations-list"></ul>
-      </div>
-
-      <div id="concept-refine-row" class="refine-row hidden">
-        <input type="text" id="concept-refine-input" placeholder="What should change? e.g. darker tone, fewer characters">
-        <button id="btn-research-concept" class="btn btn-ghost">↻ Re-search</button>
-      </div>
-
-      <div id="concept-approve-row" class="approve-row hidden">
-        <button id="btn-approve-concept" class="btn btn-approve">Approve Concept →</button>
-      </div>
-    </section>
-
-    <!-- STEP 3: SEASON -->
-    <section class="stage-panel" data-panel="season">
-      <div class="panel-header">
-        <h1>Plan the season</h1>
-        <p class="lede">One minute per episode. Every one ends on a hook that forces the next.</p>
-      </div>
-
-      <div class="season-controls">
-        <label for="episode-count">Episode count <span id="episode-count-value">20</span></label>
-        <input type="range" id="episode-count" min="15" max="30" value="20">
-      </div>
-
-      <div id="season-loading" class="loading hidden">Plotting the arc</div>
-      <ol id="season-list" class="season-list"></ol>
-
-      <div id="season-refine-row" class="refine-row hidden">
-        <input type="text" id="season-refine-input" placeholder="What should change? e.g. slower burn, more cliffhangers">
-        <button id="btn-research-season" class="btn btn-ghost">↻ Re-search</button>
-      </div>
-
-      <div id="season-approve-row" class="approve-row hidden">
-        <button id="btn-approve-season" class="btn btn-approve">Approve Season →</button>
-      </div>
-    </section>
-
-    <!-- STEP 4: EPISODE -->
-    <section class="stage-panel" data-panel="episode">
-      <div class="panel-header">
-        <h1>Episode kit</h1>
-        <p class="lede">Scene-by-scene shot list, ready for production.</p>
-      </div>
-
-      <div id="episode-progress" class="episode-progress"></div>
-
-      <div class="episode-meta">
-        <label for="episode-select">Viewing</label>
-        <select id="episode-select"></select>
-      </div>
-
-      <div id="episode-loading" class="loading hidden">Breaking down scenes</div>
-      <div id="scene-list" class="scene-list"></div>
-
-      <div id="episode-refine-row" class="refine-row hidden">
-        <input type="text" id="episode-refine-input" placeholder="What should change? e.g. more close-ups, different location">
-        <button id="btn-research-episode" class="btn btn-ghost">↻ Re-search</button>
-      </div>
-
-      <div id="episode-approve-row" class="approve-row hidden">
-        <button id="btn-approve-episode" class="btn btn-approve">Approve &amp; Next Episode →</button>
-      </div>
-
-      <div id="season-complete" class="season-complete hidden">
-        <span class="complete-icon">◆</span>
-        <div>
-          <div class="complete-title">Season complete</div>
-          <div class="complete-sub">Every episode kit has been approved and is ready for production.</div>
+        <div class="action-row">
+          <button id="btn-scout" class="btn btn-primary">
+            <span class="rec-dot"></span> Scout Trends
+          </button>
         </div>
-      </div>
-    </section>
 
-  </main>
+        <div id="trends-loading" class="loading hidden">Scanning the feed</div>
+        <div id="trends-grid" class="grid grid-trends"></div>
+
+        <div id="trends-refine-row" class="refine-row hidden">
+          <input type="text" id="trends-refine-input" placeholder="Refine the search — e.g. focus on werewolf romance">
+          <button id="btn-research-trends" class="btn btn-ghost">↻ Re-search</button>
+        </div>
+
+        <div id="trends-approve-row" class="approve-row hidden">
+          <span id="trends-selected-count" class="selected-count">0 selected</span>
+          <button id="btn-approve-trends" class="btn btn-approve" disabled>Approve Selected →</button>
+        </div>
+      </section>
+
+      <!-- STEP 2: CONCEPT -->
+      <section class="stage-panel" data-panel="concept">
+        <div class="panel-header">
+          <h1>Shape the concept</h1>
+          <p class="lede">Logline, cast, and world — built from your approved trend seed.</p>
+        </div>
+
+        <div id="concept-source" class="source-banner hidden"></div>
+        <div id="concept-loading" class="loading hidden">Breaking the story</div>
+
+        <div id="concept-result" class="hidden">
+          <div class="logline-card">
+            <span class="label">Logline</span>
+            <p id="concept-logline"></p>
+          </div>
+          <div id="style-dna-badge" class="style-badge"></div>
+
+          <h2 class="section-title">Character Sheet</h2>
+          <div id="character-grid" class="grid grid-characters"></div>
+
+          <h2 class="section-title">Locations</h2>
+          <ul id="locations-list" class="locations-list"></ul>
+        </div>
+
+        <div id="concept-refine-row" class="refine-row hidden">
+          <input type="text" id="concept-refine-input" placeholder="What should change? e.g. darker tone, fewer characters">
+          <button id="btn-research-concept" class="btn btn-ghost">↻ Re-search</button>
+        </div>
+
+        <div id="concept-approve-row" class="approve-row hidden">
+          <button id="btn-approve-concept" class="btn btn-approve">Approve Concept →</button>
+        </div>
+      </section>
+
+      <!-- STEP 3: SEASON -->
+      <section class="stage-panel" data-panel="season">
+        <div class="panel-header">
+          <h1>Plan the season</h1>
+          <p class="lede">One minute per episode. Every one ends on a hook that forces the next.</p>
+        </div>
+
+        <div class="season-controls">
+          <label for="episode-count">Episode count <span id="episode-count-value">20</span></label>
+          <input type="range" id="episode-count" min="15" max="30" value="20">
+        </div>
+
+        <div id="season-loading" class="loading hidden">Plotting the arc</div>
+        <ol id="season-list" class="season-list"></ol>
+
+        <div id="season-refine-row" class="refine-row hidden">
+          <input type="text" id="season-refine-input" placeholder="What should change? e.g. slower burn, more cliffhangers">
+          <button id="btn-research-season" class="btn btn-ghost">↻ Re-search</button>
+        </div>
+
+        <div id="season-approve-row" class="approve-row hidden">
+          <button id="btn-approve-season" class="btn btn-approve">Approve Season →</button>
+        </div>
+      </section>
+
+      <!-- STEP 4: EPISODE -->
+      <section class="stage-panel" data-panel="episode">
+        <div class="panel-header">
+          <h1>Episode kit</h1>
+          <p class="lede">Scene-by-scene shot list, ready for production.</p>
+        </div>
+
+        <div id="episode-progress" class="episode-progress"></div>
+
+        <div class="episode-meta">
+          <label for="episode-select">Viewing</label>
+          <select id="episode-select"></select>
+        </div>
+
+        <div id="episode-loading" class="loading hidden">Breaking down scenes</div>
+        <div id="scene-list" class="scene-list"></div>
+
+        <div id="episode-refine-row" class="refine-row hidden">
+          <input type="text" id="episode-refine-input" placeholder="What should change? e.g. more close-ups, different location">
+          <button id="btn-research-episode" class="btn btn-ghost">↻ Re-search</button>
+        </div>
+
+        <div id="episode-approve-row" class="approve-row hidden">
+          <button id="btn-approve-episode" class="btn btn-approve">Approve &amp; Next Episode →</button>
+        </div>
+
+        <div id="season-complete" class="season-complete hidden">
+          <span class="complete-icon">◆</span>
+          <div>
+            <div class="complete-title">Season complete</div>
+            <div class="complete-sub">Every episode kit has been approved and is ready for production.</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
 </div>
 
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
