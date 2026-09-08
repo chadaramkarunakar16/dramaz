@@ -5,11 +5,13 @@ const state = {
   currentStep: "trends",
   trendOptions: [],
   selectedTrends: [],
+  seenTrendNiches: [],
   concept: null,
   season: null,
   episodeCount: 20,
   currentEpisodeNumber: 1,
   approvedEpisodes: new Set(),
+  scenesByEpisode: {},
   busy: false,
 };
 
@@ -95,9 +97,13 @@ async function scoutTrends() {
       const refine = trendsRefineInput.value.trim();
       const params = new URLSearchParams({ _t: Date.now() });
       if (refine) params.set("refine", refine);
+      if (state.seenTrendNiches.length) params.set("exclude", JSON.stringify(state.seenTrendNiches));
       const res = await fetch(`/trends?${params.toString()}`, { cache: "no-store" });
       const trends = await res.json();
       state.trendOptions = trends;
+      trends.forEach((t) => {
+        if (t.niche && !state.seenTrendNiches.includes(t.niche)) state.seenTrendNiches.push(t.niche);
+      });
       renderTrends(trends);
       trendsRefineRow.classList.remove("hidden");
       trendsApproveRow.classList.remove("hidden");
@@ -188,6 +194,7 @@ async function generateConcept() {
           seeds: state.selectedTrends.map((t) => t.seed),
           niches: state.selectedTrends.map((t) => t.niche),
           note: conceptRefineInput.value || null,
+          previous: state.concept || null,
         }),
       });
       const concept = await res.json();
@@ -281,6 +288,7 @@ async function generateSeason() {
           concept: state.concept,
           episode_count: parseInt(episodeCountInput.value, 10),
           note: seasonRefineInput.value || null,
+          previous: state.season || null,
         }),
       });
       const season = await res.json();
@@ -383,10 +391,13 @@ async function generateEpisode(episodeNumber) {
           episode_number: episodeNumber,
           style_blend: state.concept.style_blend,
           note: episodeRefineInput.value || null,
+          previous: state.scenesByEpisode[episodeNumber] || null,
         }),
       });
       const data = await res.json();
-      renderScenes(data.scenes || data);
+      const scenes = data.scenes || data;
+      state.scenesByEpisode[episodeNumber] = scenes;
+      renderScenes(scenes);
       episodeRefineRow.classList.remove("hidden");
       episodeApproveRow.classList.remove("hidden");
       btnApproveEpisode.textContent = episodeNumber < state.episodeCount
