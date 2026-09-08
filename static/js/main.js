@@ -93,8 +93,9 @@ async function scoutTrends() {
     state.selectedTrends = [];
     try {
       const refine = trendsRefineInput.value.trim();
-      const url = refine ? `/trends?refine=${encodeURIComponent(refine)}` : "/trends";
-      const res = await fetch(url);
+      const params = new URLSearchParams({ _t: Date.now() });
+      if (refine) params.set("refine", refine);
+      const res = await fetch(`/trends?${params.toString()}`, { cache: "no-store" });
       const trends = await res.json();
       state.trendOptions = trends;
       renderTrends(trends);
@@ -181,6 +182,7 @@ async function generateConcept() {
     try {
       const res = await fetch("/concept", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           seeds: state.selectedTrends.map((t) => t.seed),
@@ -273,6 +275,7 @@ async function generateSeason() {
     try {
       const res = await fetch("/season", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           concept: state.concept,
@@ -373,6 +376,7 @@ async function generateEpisode(episodeNumber) {
     try {
       const res = await fetch("/episode", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           season: state.season,

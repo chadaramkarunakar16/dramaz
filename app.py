@@ -32,6 +32,15 @@ def get_style_by_id(style_id):
     return None
 
 
+@app.after_request
+def add_no_cache_headers(response):
+    # These routes call live AI APIs; every request should hit them fresh,
+    # never get served a stale cached response from the browser or a proxy.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
