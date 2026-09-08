@@ -1,8 +1,5 @@
 /* ============================================================
    STORAGE LAYER — projects persisted to localStorage.
-   Each project is stored under its own key; a lightweight index
-   (id/title/subtitle/updatedAt/stepStatus) powers the dashboard
-   grid without loading every project's full payload.
    ============================================================ */
 
 const STORAGE_KEYS = {
@@ -23,9 +20,7 @@ function safeGetJSON(key, fallback) {
 function safeSetJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    /* storage unavailable/full — fail silently, app still works in-memory */
-  }
+  } catch (e) {}
 }
 
 function loadProjectIndex() {
@@ -46,6 +41,7 @@ function emptyProject() {
     id: newProjectId(),
     createdAt: now,
     updatedAt: now,
+    activeTab: "studio",
     stepStatus: { trends: "active", concept: "locked", season: "locked", episode: "locked" },
     currentStep: "trends",
     trendOptions: [],
@@ -63,7 +59,6 @@ function emptyProject() {
 function loadProject(id) {
   const loaded = safeGetJSON(STORAGE_KEYS.project(id), null);
   if (!loaded) return null;
-  // Merge onto defaults so older saved projects gain any new fields safely.
   return Object.assign(emptyProject(), loaded, { id: loaded.id });
 }
 
@@ -139,14 +134,24 @@ function setTheme(theme) {
     btn.innerHTML = theme === "dark" ? THEME_ICONS.sun : THEME_ICONS.moon;
     btn.title = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
   });
+  if (state.activeTab === "studio") requestAnimationFrame(drawConnectors);
 }
 
 function toggleTheme() {
   setTheme(getTheme() === "dark" ? "light" : "dark");
 }
 
-setTheme(getTheme());
-document.querySelectorAll(".theme-toggle-btn").forEach((btn) => btn.addEventListener("click", toggleTheme));
+// Every API route can fail with a transient upstream error (e.g. the model
+// provider being overloaded), returned as {"error": "..."} with a non-2xx
+// status. Without this check, that error object gets treated as real data
+// (concept/season/scenes) and silently corrupts persisted project state.
+async function parseApiResponse(res) {
+  const data = await res.json();
+  if (!res.ok || (data && typeof data === "object" && !Array.isArray(data) && data.error)) {
+    throw new Error((data && data.error) || `Request failed (${res.status})`);
+  }
+  return data;
+}
 
 /* ============================================================
    UTIL
@@ -163,15 +168,17 @@ function relativeTime(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str == null ? "" : String(str);
+  return div.innerHTML;
+}
+
 /* ============================================================
-   CURRENT PROJECT STATE — the active project being edited.
-   Mutated in place (never reassigned) so all functions below
-   that close over `state` keep working after a project switch.
+   CURRENT PROJECT STATE
    ============================================================ */
 
-const PIPELINE = ["trends", "concept", "season", "episode"];
 let currentProjectId = null;
-
 const state = emptyProject();
 
 function hydrateState(loaded) {
@@ -179,6 +186,7 @@ function hydrateState(loaded) {
   Object.assign(state, loaded);
   if (!Array.isArray(state.approvedEpisodes)) state.approvedEpisodes = [];
   if (!state.scenesByEpisode) state.scenesByEpisode = {};
+  if (!state.activeTab) state.activeTab = "studio";
   state.busy = false;
 }
 
@@ -190,7 +198,6 @@ function persist() {
   document.title = `${projectTitle(state)} — Dramaz`;
 }
 
-// Guards against double-fired requests (double-click, rapid keyboard repeat, etc).
 async function withBusyGuard(buttons, fn) {
   if (state.busy) return;
   state.busy = true;
@@ -204,7 +211,7 @@ async function withBusyGuard(buttons, fn) {
 }
 
 /* ============================================================
-   ROUTER — dashboard (/) vs. a project (/project/<id>)
+   ROUTER
    ============================================================ */
 
 const viewDashboard = document.getElementById("view-dashboard");
@@ -232,9 +239,8 @@ function showProject(id, push) {
   viewProject.classList.remove("hidden");
   document.getElementById("rail-project-title").textContent = projectTitle(state);
   document.title = `${projectTitle(state)} — Dramaz`;
-  renderStepper();
-  goToStep(state.currentStep);
   rehydratePanels();
+  goToTab(state.activeTab, true);
   if (push) history.pushState({ view: "project", id }, "", `/project/${id}`);
 }
 
@@ -259,26 +265,29 @@ document.getElementById("btn-all-projects").addEventListener("click", () => show
 document.getElementById("rail-brand-btn").addEventListener("click", () => showDashboard(true));
 
 /* ============================================================
+   THEME TOGGLE BOOT
+   ============================================================ */
+
+setTheme(getTheme());
+document.querySelectorAll(".theme-toggle-btn").forEach((btn) => btn.addEventListener("click", toggleTheme));
+
+/* ============================================================
    DASHBOARD RENDERING
    ============================================================ */
 
 function renderProgressDots(stepStatus) {
-  return PIPELINE.map((s) => {
-    const st = (stepStatus || {})[s];
-    const cls = st === "complete" ? "done" : st === "active" ? "active" : "";
-    return `<span class="progress-dot ${cls}"></span>`;
-  }).join("");
+  return ["trends", "concept", "season", "episode"]
+    .map((s) => {
+      const st = (stepStatus || {})[s];
+      const cls = st === "complete" ? "done" : st === "active" ? "active" : "";
+      return `<span class="progress-dot ${cls}"></span>`;
+    })
+    .join("");
 }
 
 function stageBadgeLabel(p) {
   const names = { trends: "Trends", concept: "Concept", season: "Season", episode: "Episode" };
   return names[p.currentStep] || "Trends";
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str == null ? "" : String(str);
-  return div.innerHTML;
 }
 
 function renderProjectGrid() {
@@ -330,65 +339,184 @@ function renderProjectGrid() {
 }
 
 /* ============================================================
-   STEPPER (in-project navigation)
+   TAB NAVIGATION
    ============================================================ */
+
+function stepToTab(step) {
+  if (step === "trends") return "trends";
+  if (step === "concept" || step === "season") return "seasons";
+  if (step === "episode") return "episodes";
+  return "studio";
+}
+
+function renderTabNav() {
+  document.querySelectorAll(".tab-pill").forEach((btn) => {
+    const tab = btn.dataset.tab;
+    let enabled = true;
+    if (tab === "seasons") enabled = state.stepStatus.concept !== "locked";
+    if (tab === "episodes") enabled = state.stepStatus.episode !== "locked";
+    btn.disabled = !enabled;
+    btn.classList.toggle("active", state.activeTab === tab);
+  });
+}
+
+function goToTab(tab, skipPersist) {
+  if (tab === "seasons" && state.stepStatus.concept === "locked") return;
+  if (tab === "episodes" && state.stepStatus.episode === "locked") return;
+  state.activeTab = tab;
+  document.querySelectorAll(".tab-panel").forEach((p) => {
+    p.classList.toggle("active", p.dataset.tabPanel === tab);
+  });
+  renderTabNav();
+  if (tab === "studio") renderStudio();
+  if (tab === "office") renderOffice();
+  if (!skipPersist) persist();
+}
+
+document.querySelectorAll(".tab-pill").forEach((btn) => {
+  btn.addEventListener("click", () => goToTab(btn.dataset.tab));
+});
 
 function setStepStatus(step, status) {
   state.stepStatus[step] = status;
-  renderStepper();
+  renderTabNav();
+  updateStudioNodeStates();
+  if (state.activeTab === "studio") requestAnimationFrame(drawConnectors);
+  if (state.activeTab === "office") renderOffice();
 }
 
-function renderStepper() {
-  document.querySelectorAll(".step").forEach((btn) => {
-    const step = btn.dataset.step;
-    const status = state.stepStatus[step];
-    btn.classList.remove("active", "complete", "locked");
-    btn.disabled = status === "locked";
-    if (step === state.currentStep) btn.classList.add("active");
-    else if (status === "complete") btn.classList.add("complete");
-    else if (status === "locked") btn.classList.add("locked");
+function unlockArcSection() {
+  document.getElementById("arc-section").classList.remove("locked");
+  document.getElementById("arc-content").classList.remove("hidden");
+}
 
-    const statusEl = btn.querySelector(".step-status");
-    const defaults = {
-      trends: "Scout what's viral",
-      concept: "Logline, cast, world",
-      season: "Episode arc",
-      episode: "Shot-by-shot kit",
-    };
-    statusEl.textContent = status === "complete" && step !== state.currentStep ? "Approved" : defaults[step];
+/* ============================================================
+   STUDIO — node canvas
+   ============================================================ */
+
+function studioNodeMeta(key, status) {
+  if (key === "trends") {
+    if (status === "complete") return `${state.selectedTrends.length} seed${state.selectedTrends.length === 1 ? "" : "s"} approved`;
+    if (status === "active") return state.trendOptions.length ? `${state.trendOptions.length} niches found` : "Ready to scout";
+    return "Not started";
+  }
+  if (key === "concept") {
+    if (status === "complete") return `${state.concept ? (state.concept.characters || []).length : 0} characters cast`;
+    if (status === "active") return state.concept ? "Concept drafted" : "Building concept…";
+    return "Waiting on Trends";
+  }
+  if (key === "season") {
+    if (status === "complete") return `${state.season ? state.season.length : 0}-episode arc approved`;
+    if (status === "active") return state.season ? `${state.season.length}-episode arc drafted` : "Plotting arc…";
+    return "Waiting on Concept";
+  }
+  if (key === "episode") {
+    if (status === "complete") return "All episode kits approved";
+    if (status === "active") return `${state.approvedEpisodes.length}/${state.episodeCount} episodes approved`;
+    return "Waiting on Season";
+  }
+  return "";
+}
+
+function updateStudioNodeStates() {
+  ["trends", "concept", "season", "episode"].forEach((key) => {
+    const el = document.querySelector(`.studio-node[data-node="${key}"]`);
+    if (!el) return;
+    const status = state.stepStatus[key];
+    el.classList.remove("active", "complete", "locked");
+    if (status === "active") el.classList.add("active");
+    else if (status === "complete") el.classList.add("complete");
+    else if (status === "locked") el.classList.add("locked");
+    const meta = document.getElementById(`node-meta-${key}`);
+    if (meta) meta.textContent = studioNodeMeta(key, status);
   });
 }
 
-function goToStep(step) {
-  if (state.stepStatus[step] === "locked") return;
-  state.currentStep = step;
-  document.querySelectorAll(".stage-panel").forEach((p) => {
-    p.classList.toggle("active", p.dataset.panel === step);
+function drawConnectors() {
+  const svg = document.getElementById("studio-connectors");
+  const canvas = document.getElementById("studio-canvas");
+  if (!svg || !canvas) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  if (canvasRect.width === 0) return;
+  svg.setAttribute("viewBox", `0 0 ${canvasRect.width} ${canvasRect.height}`);
+  svg.innerHTML = "";
+
+  [["trends", "concept"], ["concept", "season"], ["season", "episode"]].forEach(([fromKey, toKey]) => {
+    const fromPort = document.querySelector(`.studio-node[data-node="${fromKey}"] .port-out`);
+    const toPort = document.querySelector(`.studio-node[data-node="${toKey}"] .port-in`);
+    if (!fromPort || !toPort) return;
+    const a = fromPort.getBoundingClientRect();
+    const b = toPort.getBoundingClientRect();
+    const x1 = a.left + a.width / 2 - canvasRect.left;
+    const y1 = a.top + a.height / 2 - canvasRect.top;
+    const x2 = b.left + b.width / 2 - canvasRect.left;
+    const y2 = b.top + b.height / 2 - canvasRect.top;
+    const dx = Math.max(60, Math.abs(x2 - x1) * 0.5);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`);
+    path.setAttribute("class", "connector-path");
+    if (state.stepStatus[fromKey] === "complete") path.classList.add("lit");
+    if (state.stepStatus[toKey] === "active") path.classList.add("flowing");
+    svg.appendChild(path);
   });
-  renderStepper();
 }
 
-document.querySelectorAll(".step").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    goToStep(btn.dataset.step);
-    persist();
+function renderStudio() {
+  updateStudioNodeStates();
+  requestAnimationFrame(drawConnectors);
+}
+
+document.querySelectorAll(".studio-node").forEach((node) => {
+  node.addEventListener("click", () => {
+    if (node.classList.contains("locked")) return;
+    goToTab(stepToTab(node.dataset.node));
   });
 });
 
+window.addEventListener("resize", () => {
+  if (state.activeTab === "studio" && !viewProject.classList.contains("hidden")) drawConnectors();
+});
+
 /* ============================================================
-   RESUME — repaint panels for whatever data the loaded
-   project already has, so reopening a project mid-flow works.
+   OFFICE — agent presence board
+   ============================================================ */
+
+const OFFICE_AGENTS = [
+  { key: "trends", name: "Trend Scout", role: "Live web research", icon: "📡" },
+  { key: "concept", name: "Concept Architect", role: "Logline, cast, world", icon: "🎭" },
+  { key: "season", name: "Season Planner", role: "Episode-by-episode arc", icon: "🗂" },
+  { key: "episode", name: "Episode Director", role: "Scene-by-scene kit", icon: "🎬" },
+];
+
+function renderOffice() {
+  const board = document.getElementById("office-board");
+  if (!board) return;
+  board.innerHTML = OFFICE_AGENTS.map((a) => {
+    const status = state.stepStatus[a.key];
+    const cls = status === "active" ? "active" : status === "complete" ? "complete" : "";
+    const label = status === "active" ? "Working" : status === "complete" ? "Done" : "Idle";
+    return `
+      <div class="desk-card ${cls}">
+        <div class="desk-avatar">${a.icon}<span class="presence"></span></div>
+        <p class="desk-name">${a.name}</p>
+        <p class="desk-role">${a.role}</p>
+        <span class="desk-status">${label}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ============================================================
+   RESUME — repaint panels for the loaded project's data
    ============================================================ */
 
 function rehydratePanels() {
-  // Trends
   if (state.trendOptions && state.trendOptions.length) {
     renderTrends(state.trendOptions);
     document.querySelectorAll(".trend-card").forEach((card) => {
       const i = parseInt(card.dataset.index, 10);
       const t = state.trendOptions[i];
-      const isSelected = state.selectedTrends.some((s) => s.niche === t.niche);
-      card.classList.toggle("selected", isSelected);
+      card.classList.toggle("selected", state.selectedTrends.some((s) => s.niche === t.niche));
     });
     trendsRefineRow.classList.remove("hidden");
     trendsApproveRow.classList.remove("hidden");
@@ -399,7 +527,6 @@ function rehydratePanels() {
     trendsApproveRow.classList.add("hidden");
   }
 
-  // Concept
   if (state.concept) {
     conceptSource.classList.remove("hidden");
     conceptSource.innerHTML = `Built from: <b>${escapeHtml(state.selectedTrends.map((t) => t.niche).join(", "))}</b>`;
@@ -414,7 +541,13 @@ function rehydratePanels() {
     conceptApproveRow.classList.add("hidden");
   }
 
-  // Season
+  if (state.stepStatus.season !== "locked") {
+    unlockArcSection();
+  } else {
+    document.getElementById("arc-section").classList.add("locked");
+    document.getElementById("arc-content").classList.add("hidden");
+  }
+
   episodeCountInput.value = state.episodeCount || 20;
   episodeCountValue.textContent = episodeCountInput.value;
   if (state.season && state.season.length) {
@@ -429,7 +562,6 @@ function rehydratePanels() {
     seasonApproveRow.classList.add("hidden");
   }
 
-  // Episode
   seasonCompleteBanner.classList.add("hidden");
   episodeApproveRow.classList.add("hidden");
   episodeRefineRow.classList.add("hidden");
@@ -452,6 +584,10 @@ function rehydratePanels() {
       seasonCompleteBanner.classList.remove("hidden");
     }
   }
+
+  renderTabNav();
+  updateStudioNodeStates();
+  renderOffice();
 }
 
 /* ================= STEP 1: TRENDS ================= */
@@ -479,7 +615,7 @@ async function scoutTrends() {
       if (refine) params.set("refine", refine);
       if (state.seenTrendNiches.length) params.set("exclude", JSON.stringify(state.seenTrendNiches));
       const res = await fetch(`/trends?${params.toString()}`, { cache: "no-store" });
-      const trends = await res.json();
+      const trends = await parseApiResponse(res);
       state.trendOptions = trends;
       trends.forEach((t) => {
         if (t.niche && !state.seenTrendNiches.includes(t.niche)) state.seenTrendNiches.push(t.niche);
@@ -488,6 +624,7 @@ async function scoutTrends() {
       trendsRefineRow.classList.remove("hidden");
       trendsApproveRow.classList.remove("hidden");
       updateTrendSelectionUI();
+      updateStudioNodeStates();
       persist();
     } catch (err) {
       trendsGrid.innerHTML = `<p style="color:var(--danger)">Failed to scout trends: ${err}</p>`;
@@ -541,7 +678,8 @@ btnApproveTrends.addEventListener("click", () => {
   if (state.busy || state.selectedTrends.length === 0) return;
   setStepStatus("trends", "complete");
   setStepStatus("concept", "active");
-  goToStep("concept");
+  state.currentStep = "concept";
+  goToTab("seasons");
   persist();
   generateConcept();
 });
@@ -580,12 +718,13 @@ async function generateConcept() {
           previous: state.concept || null,
         }),
       });
-      const concept = await res.json();
+      const concept = await parseApiResponse(res);
       state.concept = concept;
       renderConcept(concept);
       conceptResult.classList.remove("hidden");
       conceptRefineRow.classList.remove("hidden");
       conceptApproveRow.classList.remove("hidden");
+      updateStudioNodeStates();
       persist();
     } catch (err) {
       conceptResult.innerHTML = `<p style="color:var(--danger)">Failed to generate concept: ${err}</p>`;
@@ -637,12 +776,13 @@ btnApproveConcept.addEventListener("click", () => {
   if (state.busy) return;
   setStepStatus("concept", "complete");
   setStepStatus("season", "active");
-  goToStep("season");
+  state.currentStep = "season";
+  unlockArcSection();
   persist();
   generateSeason();
 });
 
-/* ================= STEP 3: SEASON ================= */
+/* ================= STEP 3: SEASON (arc, inside Seasons tab) ================= */
 
 const episodeCountInput = document.getElementById("episode-count");
 const episodeCountValue = document.getElementById("episode-count-value");
@@ -678,12 +818,13 @@ async function generateSeason() {
           previous: state.season || null,
         }),
       });
-      const season = await res.json();
+      const season = await parseApiResponse(res);
       state.season = season;
       state.episodeCount = season.length;
       renderSeason(season);
       seasonRefineRow.classList.remove("hidden");
       seasonApproveRow.classList.remove("hidden");
+      updateStudioNodeStates();
       persist();
     } catch (err) {
       seasonList.innerHTML = `<p style="color:var(--danger)">Failed to generate season: ${err}</p>`;
@@ -718,7 +859,8 @@ btnApproveSeason.addEventListener("click", () => {
   populateEpisodeSelect(state.season);
   state.currentEpisodeNumber = 1;
   state.approvedEpisodes = [];
-  goToStep("episode");
+  state.currentStep = "episode";
+  goToTab("episodes");
   persist();
   generateEpisode(1);
 });
@@ -783,7 +925,7 @@ async function generateEpisode(episodeNumber) {
           previous: state.scenesByEpisode[episodeNumber] || null,
         }),
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       const scenes = data.scenes || data;
       state.scenesByEpisode[episodeNumber] = scenes;
       renderScenes(scenes);
@@ -791,6 +933,7 @@ async function generateEpisode(episodeNumber) {
       episodeApproveRow.classList.remove("hidden");
       btnApproveEpisode.textContent =
         episodeNumber < state.episodeCount ? "Approve & Next Episode →" : "Approve & Finish Season →";
+      updateStudioNodeStates();
       persist();
     } catch (err) {
       sceneList.innerHTML = `<p style="color:var(--danger)">Failed to generate episode kit: ${err}</p>`;
