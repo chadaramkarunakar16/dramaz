@@ -295,17 +295,20 @@ body[data-bg="photo"] .character-bg { opacity: 1; }
   position: absolute; width: 220px; background: var(--bg-elevated);
   border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 1rem 1.1rem; box-shadow: var(--shadow-md); cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.18s ease, left 0.35s ease, top 0.35s ease;
+  transform: translateY(-50%);
 }
 
-.studio-node:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.studio-node:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md), 0 0 0 1px var(--border-strong); }
 .studio-node.locked { cursor: not-allowed; opacity: 0.55; }
-.studio-node.locked:hover { transform: none; }
 
-.studio-node[data-node="trends"] { left: 4%; top: 40%; }
-.studio-node[data-node="concept"] { left: 28%; top: 14%; }
-.studio-node[data-node="season"] { left: 52%; top: 48%; }
-.studio-node[data-node="episode"] { left: 76%; top: 18%; }
+/* Trend-result nodes are smaller leaves fanned out from the root Trends
+   node — one per discovered niche, lit up once the user picks it. */
+.studio-node.trend-result-node { width: 188px; padding: 0.75rem 0.9rem; }
+.studio-node.trend-result-node .node-sub { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.5rem; }
+.studio-node.trend-result-node.selected { border-color: var(--accent); box-shadow: var(--shadow-md), 0 0 0 1px rgba(var(--accent-rgb), 0.4); }
+.studio-node.trend-result-node.selected .node-status-dot { background: var(--accent); }
+.studio-node.trend-result-node.selected .node-meta { color: var(--accent-strong); }
 
 .node-port {
   position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
@@ -340,7 +343,7 @@ body[data-bg="photo"] .character-bg { opacity: 1; }
 
 .studio-node.complete .node-meta { color: var(--accent-strong); }
 
-/* ============ OFFICE — 3D soundstage ============ */
+/* ============ OFFICE — team photo ============ */
 
 /* No `display` here on purpose: the base .tab-panel{display:none} rule must
    win while this panel is hidden. Only .office-panel.active sets display,
@@ -367,14 +370,21 @@ body[data-bg="photo"] .character-bg { opacity: 1; }
 .office-stage {
   position: relative; flex: 1; min-height: 380px; overflow: hidden;
   border-top: 1px solid var(--border);
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(var(--accent-rgb), 0.06), transparent 70%),
-    var(--bg-canvas);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-canvas);
 }
 
-.office-stage canvas { display: block; }
+/* .office-frame is locked to the source photo's own aspect ratio, so
+   percentage-based marker positions always line up with the same
+   pixels regardless of how much empty space the panel has around it. */
+.office-frame {
+  position: relative; max-width: 100%; max-height: 100%;
+  width: 100%; aspect-ratio: 2000 / 1493;
+}
 
-.scene-labels { position: absolute; inset: 0; pointer-events: none; }
+.office-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.office-markers { position: absolute; inset: 0; pointer-events: none; }
 
 .scene-label {
   position: absolute; transform: translate(-50%, -100%);

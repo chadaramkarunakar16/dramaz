@@ -85,48 +85,6 @@
     <section class="tab-panel active studio-panel" data-tab-panel="studio">
       <div class="studio-canvas" id="studio-canvas">
         <svg class="studio-connectors" id="studio-connectors"></svg>
-
-        <div class="studio-node" data-node="trends">
-          <span class="node-port port-out"></span>
-          <div class="node-head">
-            <span class="node-status-dot"></span>
-            <span class="node-title">Trend Scout</span>
-          </div>
-          <p class="node-sub">Live web research</p>
-          <p class="node-meta" id="node-meta-trends">Not started</p>
-        </div>
-
-        <div class="studio-node" data-node="concept">
-          <span class="node-port port-in"></span>
-          <span class="node-port port-out"></span>
-          <div class="node-head">
-            <span class="node-status-dot"></span>
-            <span class="node-title">Concept Architect</span>
-          </div>
-          <p class="node-sub">Logline, cast, world</p>
-          <p class="node-meta" id="node-meta-concept">Waiting on Trends</p>
-        </div>
-
-        <div class="studio-node" data-node="season">
-          <span class="node-port port-in"></span>
-          <span class="node-port port-out"></span>
-          <div class="node-head">
-            <span class="node-status-dot"></span>
-            <span class="node-title">Season Planner</span>
-          </div>
-          <p class="node-sub">Episode-by-episode arc</p>
-          <p class="node-meta" id="node-meta-season">Waiting on Concept</p>
-        </div>
-
-        <div class="studio-node" data-node="episode">
-          <span class="node-port port-in"></span>
-          <div class="node-head">
-            <span class="node-status-dot"></span>
-            <span class="node-title">Episode Director</span>
-          </div>
-          <p class="node-sub">Scene-by-scene shot kit</p>
-          <p class="node-meta" id="node-meta-episode">Waiting on Season</p>
-        </div>
       </div>
     </section>
 
@@ -276,14 +234,17 @@
           <span><i class="legend-dot"></i>Idle</span>
         </div>
       </div>
-      <div class="office-stage" id="office-stage"></div>
+      <div class="office-stage" id="office-stage">
+        <div class="office-frame">
+          <img class="office-photo" src="{{ url_for('static', filename='img/bg-office.jpg') }}" alt="The Dramaz production floor">
+          <div class="office-markers" id="office-markers"></div>
+        </div>
+      </div>
     </section>
 
   </main>
 </div>
 
-<script src="{{ url_for('static', filename='js/vendor/three.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/scenes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

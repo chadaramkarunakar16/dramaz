@@ -338,9 +338,8 @@ function goToTab(tab, skipPersist) {
   });
   renderTabNav();
   updateBackgroundMode(tab === "studio" || tab === "office" ? "plain" : "photo");
-  if (tab === "studio") renderStudio();
+  if (tab === "studio") renderStudioGraph();
   if (tab === "office") renderOffice();
-  else stopOffice();
   if (!skipPersist) persist();
 }
 
@@ -351,9 +350,8 @@ document.querySelectorAll(".tab-pill").forEach((btn) => {
 function setStepStatus(step, status) {
   state.stepStatus[step] = status;
   renderTabNav();
-  updateStudioNodeStates();
-  if (state.activeTab === "studio") requestAnimationFrame(drawConnectors);
-  if (state.activeTab === "office" && typeof OfficeScene !== "undefined") OfficeScene.refresh();
+  if (state.activeTab === "studio") renderStudioGraph();
+  if (state.activeTab === "office") renderOffice();
 }
 
 function unlockArcSection() {
@@ -362,48 +360,171 @@ function unlockArcSection() {
 }
 
 /* ============================================================
-   STUDIO — node canvas
+   STUDIO — a data-driven node graph, not a fixed diagram.
+   The graph grows as the project actually progresses: it starts with
+   just the Trend Scout node; scouting fans out one node per discovered
+   niche; approving trend(s) draws a wire from each selected niche into
+   a new Concept Architect node; approving concept/season adds the next
+   node in the chain. Everything here is derived fresh from `state` on
+   every render, so a page reload reconstructs the exact same graph.
    ============================================================ */
 
-function studioNodeMeta(key, status) {
-  if (key === "trends") {
-    if (status === "complete") return `${state.selectedTrends.length} seed${state.selectedTrends.length === 1 ? "" : "s"} approved`;
-    if (status === "active") return state.trendOptions.length ? `${state.trendOptions.length} niches found` : "Ready to scout";
-    return "Not started";
-  }
-  if (key === "concept") {
-    if (status === "complete") return `${state.concept ? (state.concept.characters || []).length : 0} characters cast`;
-    if (status === "active") return state.concept ? "Concept drafted" : "Building concept…";
-    return "Waiting on Trends";
-  }
-  if (key === "season") {
-    if (status === "complete") return `${state.season ? state.season.length : 0}-episode arc approved`;
-    if (status === "active") return state.season ? `${state.season.length}-episode arc drafted` : "Plotting arc…";
-    return "Waiting on Concept";
-  }
-  if (key === "episode") {
-    if (status === "complete") return "All episode kits approved";
-    if (status === "active") return `${state.approvedEpisodes.length}/${state.episodeCount} episodes approved`;
-    return "Waiting on Season";
-  }
-  return "";
+const STUDIO_DEPTH_X = [4, 26, 50, 71, 89]; // percent-left per column (trends, trend-results, concept, season, episode)
+
+function studioTrendsMeta() {
+  const status = state.stepStatus.trends;
+  if (status === "complete") return `${state.selectedTrends.length} seed${state.selectedTrends.length === 1 ? "" : "s"} approved`;
+  if (state.trendOptions.length) return `${state.trendOptions.length} niches found`;
+  return "Ready to scout";
 }
 
-function updateStudioNodeStates() {
-  ["trends", "concept", "season", "episode"].forEach((key) => {
-    const el = document.querySelector(`.studio-node[data-node="${key}"]`);
-    if (!el) return;
-    const status = state.stepStatus[key];
-    el.classList.remove("active", "complete", "locked");
-    if (status === "active") el.classList.add("active");
-    else if (status === "complete") el.classList.add("complete");
-    else if (status === "locked") el.classList.add("locked");
-    const meta = document.getElementById(`node-meta-${key}`);
-    if (meta) meta.textContent = studioNodeMeta(key, status);
+function studioConceptMeta() {
+  if (state.stepStatus.concept === "complete") return `${state.concept ? (state.concept.characters || []).length : 0} characters cast`;
+  return state.concept ? "Concept drafted" : "Building concept…";
+}
+
+function studioSeasonMeta() {
+  if (state.stepStatus.season === "complete") return `${state.season ? state.season.length : 0}-episode arc approved`;
+  return state.season ? `${state.season.length}-episode arc drafted` : "Plotting arc…";
+}
+
+function studioEpisodeMeta() {
+  if (state.stepStatus.episode === "complete") return "All episode kits approved";
+  return `${state.approvedEpisodes.length}/${state.episodeCount} episodes approved`;
+}
+
+// Builds the current node/edge list purely from state — nothing here is
+// stored separately, so persistence and refresh "just work" for free.
+function buildStudioGraph() {
+  const nodes = [
+    {
+      id: "trends-root",
+      depth: 0,
+      kind: "trends",
+      title: "Trend Scout",
+      sub: "Live web research",
+      status: state.stepStatus.trends,
+      meta: studioTrendsMeta(),
+    },
+  ];
+  const edges = [];
+
+  (state.trendOptions || []).forEach((t, i) => {
+    const id = `trend-${i}`;
+    const selected = state.selectedTrends.some((s) => s.niche === t.niche);
+    nodes.push({
+      id,
+      depth: 1,
+      kind: "trend-result",
+      title: t.niche,
+      sub: t.seed && t.seed.length > 72 ? t.seed.slice(0, 69) + "…" : t.seed,
+      selected,
+      meta: selected ? "Selected for concept" : "Discovered",
+    });
+    edges.push({ from: "trends-root", to: id });
   });
+
+  if (state.stepStatus.concept !== "locked") {
+    nodes.push({
+      id: "concept",
+      depth: 2,
+      kind: "concept",
+      title: "Concept Architect",
+      sub: "Logline, cast, world",
+      status: state.stepStatus.concept,
+      meta: studioConceptMeta(),
+    });
+    const flowing = state.stepStatus.concept === "active";
+    state.selectedTrends.forEach((sel) => {
+      const idx = state.trendOptions.findIndex((t) => t.niche === sel.niche);
+      if (idx >= 0) edges.push({ from: `trend-${idx}`, to: "concept", lit: true, flowing });
+    });
+  }
+
+  if (state.stepStatus.season !== "locked") {
+    nodes.push({
+      id: "season",
+      depth: 3,
+      kind: "season",
+      title: "Season Planner",
+      sub: "Episode-by-episode arc",
+      status: state.stepStatus.season,
+      meta: studioSeasonMeta(),
+    });
+    edges.push({ from: "concept", to: "season", lit: true, flowing: state.stepStatus.season === "active" });
+  }
+
+  if (state.stepStatus.episode !== "locked") {
+    nodes.push({
+      id: "episode",
+      depth: 4,
+      kind: "episode",
+      title: "Episode Director",
+      sub: "Scene-by-scene shot kit",
+      status: state.stepStatus.episode,
+      meta: studioEpisodeMeta(),
+    });
+    edges.push({ from: "season", to: "episode", lit: true, flowing: state.stepStatus.episode === "active" });
+  }
+
+  return { nodes, edges };
 }
 
-function drawConnectors() {
+function studioNodeTargetTab(kind) {
+  return kind === "trend-result" ? "trends" : stepToTab(kind);
+}
+
+function renderStudioGraph() {
+  const canvas = document.getElementById("studio-canvas");
+  if (!canvas) return;
+  const { nodes, edges } = buildStudioGraph();
+
+  // Even vertical spacing among siblings that share a column (depth).
+  const byDepth = {};
+  nodes.forEach((n) => (byDepth[n.depth] = byDepth[n.depth] || []).push(n));
+  Object.values(byDepth).forEach((group) => {
+    group.forEach((n, i) => (n.top = ((i + 1) / (group.length + 1)) * 100));
+  });
+
+  canvas.querySelectorAll(".studio-node").forEach((el) => el.remove());
+
+  nodes.forEach((n) => {
+    const el = document.createElement("div");
+    el.className = "studio-node";
+    el.dataset.nodeId = n.id;
+    if (n.kind === "trend-result") {
+      el.classList.add("trend-result-node");
+      if (n.selected) el.classList.add("selected");
+    } else {
+      if (n.status === "active") el.classList.add("active");
+      if (n.status === "complete") el.classList.add("complete");
+    }
+    el.style.left = `${STUDIO_DEPTH_X[n.depth]}%`;
+    el.style.top = `${n.top}%`;
+
+    const hasIn = n.depth > 0;
+    const hasOut = edges.some((e) => e.from === n.id);
+    el.innerHTML = `
+      ${hasIn ? '<span class="node-port port-in"></span>' : ""}
+      ${hasOut ? '<span class="node-port port-out"></span>' : ""}
+      <div class="node-head">
+        <span class="node-status-dot"></span>
+        <span class="node-title">${escapeHtml(n.title)}</span>
+      </div>
+      <p class="node-sub">${escapeHtml(n.sub || "")}</p>
+      <p class="node-meta">${escapeHtml(n.meta || "")}</p>
+    `;
+    el.addEventListener("click", () => goToTab(studioNodeTargetTab(n.kind)));
+    canvas.appendChild(el);
+  });
+
+  requestAnimationFrame(() => drawConnectors(edges));
+}
+
+let lastStudioEdges = [];
+
+function drawConnectors(edges) {
+  if (edges) lastStudioEdges = edges;
   const svg = document.getElementById("studio-connectors");
   const canvas = document.getElementById("studio-canvas");
   if (!svg || !canvas) return;
@@ -412,9 +533,9 @@ function drawConnectors() {
   svg.setAttribute("viewBox", `0 0 ${canvasRect.width} ${canvasRect.height}`);
   svg.innerHTML = "";
 
-  [["trends", "concept"], ["concept", "season"], ["season", "episode"]].forEach(([fromKey, toKey]) => {
-    const fromPort = document.querySelector(`.studio-node[data-node="${fromKey}"] .port-out`);
-    const toPort = document.querySelector(`.studio-node[data-node="${toKey}"] .port-in`);
+  lastStudioEdges.forEach((edge) => {
+    const fromPort = document.querySelector(`.studio-node[data-node-id="${edge.from}"] .port-out`);
+    const toPort = document.querySelector(`.studio-node[data-node-id="${edge.to}"] .port-in`);
     if (!fromPort || !toPort) return;
     const a = fromPort.getBoundingClientRect();
     const b = toPort.getBoundingClientRect();
@@ -422,27 +543,15 @@ function drawConnectors() {
     const y1 = a.top + a.height / 2 - canvasRect.top;
     const x2 = b.left + b.width / 2 - canvasRect.left;
     const y2 = b.top + b.height / 2 - canvasRect.top;
-    const dx = Math.max(60, Math.abs(x2 - x1) * 0.5);
+    const dx = Math.max(50, Math.abs(x2 - x1) * 0.5);
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`);
     path.setAttribute("class", "connector-path");
-    if (state.stepStatus[fromKey] === "complete") path.classList.add("lit");
-    if (state.stepStatus[toKey] === "active") path.classList.add("flowing");
+    if (edge.lit) path.classList.add("lit");
+    if (edge.flowing) path.classList.add("flowing");
     svg.appendChild(path);
   });
 }
-
-function renderStudio() {
-  updateStudioNodeStates();
-  requestAnimationFrame(drawConnectors);
-}
-
-document.querySelectorAll(".studio-node").forEach((node) => {
-  node.addEventListener("click", () => {
-    if (node.classList.contains("locked")) return;
-    goToTab(stepToTab(node.dataset.node));
-  });
-});
 
 window.addEventListener("resize", () => {
   if (state.activeTab === "studio" && !viewProject.classList.contains("hidden")) drawConnectors();
@@ -450,19 +559,34 @@ window.addEventListener("resize", () => {
 
 /* ============================================================
    OFFICE — agent presence board
+   Four static labels pinned over the four people in the team photo,
+   one per agent, lit up from the same stepStatus state Studio reads.
    ============================================================ */
 
-// The Office tab is a live Three.js soundstage (see scenes.js). It only
-// renders while the tab is on screen so it costs nothing in the background.
+const OFFICE_AGENTS = [
+  { key: "trends", name: "Trend Scout", left: 72, top: 47, meta: studioTrendsMeta },
+  { key: "concept", name: "Concept Architect", left: 49, top: 31, meta: studioConceptMeta },
+  { key: "season", name: "Season Planner", left: 46, top: 62, meta: studioSeasonMeta },
+  { key: "episode", name: "Episode Director", left: 23, top: 46, meta: studioEpisodeMeta },
+];
+
 function renderOffice() {
-  const stage = document.getElementById("office-stage");
-  if (!stage || typeof OfficeScene === "undefined") return;
-  OfficeScene.start(stage, () => state.stepStatus);
+  const markers = document.getElementById("office-markers");
+  if (!markers) return;
+  markers.innerHTML = OFFICE_AGENTS.map((agent) => {
+    const status = state.stepStatus[agent.key];
+    const cls = status === "active" ? "is-active" : status === "complete" ? "is-complete" : "";
+    return `
+      <div class="scene-label ${cls}" style="left:${agent.left}%; top:${agent.top}%;">
+        <span class="scene-label-dot"></span>
+        <span class="scene-label-text">${escapeHtml(agent.name)}</span>
+        <span class="scene-label-status">${escapeHtml(agent.meta())}</span>
+      </div>
+    `;
+  }).join("");
 }
 
-function stopOffice() {
-  if (typeof OfficeScene !== "undefined") OfficeScene.stop();
-}
+function stopOffice() {}
 
 /* ============================================================
    RESUME — repaint panels for the loaded project's data
@@ -544,8 +668,8 @@ function rehydratePanels() {
   }
 
   renderTabNav();
-  updateStudioNodeStates();
-  if (typeof OfficeScene !== "undefined") OfficeScene.refresh();
+  if (state.activeTab === "studio") renderStudioGraph();
+  if (state.activeTab === "office") renderOffice();
 }
 
 /* ================= STEP 1: TRENDS ================= */
@@ -582,7 +706,6 @@ async function scoutTrends() {
       trendsRefineRow.classList.remove("hidden");
       trendsApproveRow.classList.remove("hidden");
       updateTrendSelectionUI();
-      updateStudioNodeStates();
       persist();
     } catch (err) {
       trendsGrid.innerHTML = `<p style="color:var(--danger)">Failed to scout trends: ${err}</p>`;
@@ -682,7 +805,6 @@ async function generateConcept() {
       conceptResult.classList.remove("hidden");
       conceptRefineRow.classList.remove("hidden");
       conceptApproveRow.classList.remove("hidden");
-      updateStudioNodeStates();
       persist();
     } catch (err) {
       conceptResult.innerHTML = `<p style="color:var(--danger)">Failed to generate concept: ${err}</p>`;
@@ -782,7 +904,6 @@ async function generateSeason() {
       renderSeason(season);
       seasonRefineRow.classList.remove("hidden");
       seasonApproveRow.classList.remove("hidden");
-      updateStudioNodeStates();
       persist();
     } catch (err) {
       seasonList.innerHTML = `<p style="color:var(--danger)">Failed to generate season: ${err}</p>`;
@@ -891,7 +1012,6 @@ async function generateEpisode(episodeNumber) {
       episodeApproveRow.classList.remove("hidden");
       btnApproveEpisode.textContent =
         episodeNumber < state.episodeCount ? "Approve & Next Episode →" : "Approve & Finish Season →";
-      updateStudioNodeStates();
       persist();
     } catch (err) {
       sceneList.innerHTML = `<p style="color:var(--danger)">Failed to generate episode kit: ${err}</p>`;
