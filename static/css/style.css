@@ -47,6 +47,29 @@ body {
 .hidden { display: none !important; }
 .view.hidden { display: none !important; }
 
+/* ============ CHARACTER BACKGROUND ============ */
+/* Shown behind Dashboard / Trends / Seasons / Episodes only — Studio and
+   Office already paint their own opaque canvases, and are additionally
+   excluded here via body[data-bg="plain"] so nothing shows through their
+   header/legend chrome. Toggled by JS (updateBackgroundMode). */
+
+.character-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background-image:
+    linear-gradient(180deg, rgba(8,8,9,0.86) 0%, rgba(8,8,9,0.93) 55%, rgba(8,8,9,0.97) 100%),
+    url("../img/bg-filmmaker.jpg");
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+}
+
+body[data-bg="photo"] .character-bg { opacity: 1; }
+
 /* ============ AMBIENT BACKGROUND — soundstage light ============ */
 
 .ambient {
@@ -477,12 +500,29 @@ body {
 .season-controls label span { font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
 .season-controls input[type="range"] { accent-color: var(--accent); width: 200px; }
 
-.season-list { list-style: none; padding: 0; margin-top: 1.5rem; }
-.season-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.95rem 1.25rem; margin-bottom: 0.6rem; display: flex; gap: 1rem; align-items: flex-start; box-shadow: var(--shadow-sm); }
-.season-item .ep-number { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); min-width: 2rem; padding-top: 0.1rem; }
-.season-item .hook { font-size: 0.88rem; margin: 0 0 0.3rem 0; color: var(--text); }
-.season-item .cliffhanger { font-size: 0.76rem; color: var(--text-tertiary); }
-.season-item .cliffhanger .cliff-label { color: var(--accent); font-family: var(--font-mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.4rem; }
+.season-list { list-style: none; padding: 0; margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
+
+.season-item {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 1.1rem 1.35rem; display: flex; gap: 1.1rem; align-items: flex-start;
+  box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, background 0.15s ease;
+}
+.season-item:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+
+.season-item .ep-number {
+  font-family: var(--font-mono); font-size: 0.76rem; font-weight: 600; color: var(--accent-strong);
+  background: rgba(var(--accent-rgb), 0.1); border: 1px solid rgba(var(--accent-rgb), 0.22);
+  width: 2.3rem; height: 2.3rem; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.season-item .season-item-body { min-width: 0; }
+.season-item .hook { font-size: 0.9rem; line-height: 1.5; margin: 0 0 0.5rem 0; color: var(--text); }
+.season-item .cliffhanger { font-size: 0.78rem; line-height: 1.5; color: var(--text-tertiary); margin: 0; }
+.season-item .cliffhanger .cliff-label {
+  display: inline-block; color: var(--accent-strong); font-family: var(--font-mono); font-size: 0.64rem;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.5rem;
+}
 
 /* ============ EPISODE ============ */
 

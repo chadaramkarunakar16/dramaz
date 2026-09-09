@@ -183,12 +183,21 @@ async function withBusyGuard(buttons, fn) {
 const viewDashboard = document.getElementById("view-dashboard");
 const viewProject = document.getElementById("view-project");
 
+// Photo mode (the filmmaker background) shows on Dashboard, Trends, Seasons,
+// Episodes. Plain mode (no photo) is for Studio and Office, which already
+// paint their own opaque canvases and shouldn't have it bleeding through
+// their header/legend chrome.
+function updateBackgroundMode(mode) {
+  document.body.dataset.bg = mode;
+}
+
 function showDashboard(push) {
   currentProjectId = null;
   viewDashboard.classList.remove("hidden");
   viewProject.classList.add("hidden");
   stopOffice();
   renderProjectGrid();
+  updateBackgroundMode("photo");
   document.title = "Dramaz — AI Micro-Drama Studio";
   if (push) history.pushState({ view: "dashboard" }, "", "/");
 }
@@ -328,6 +337,7 @@ function goToTab(tab, skipPersist) {
     p.classList.toggle("active", p.dataset.tabPanel === tab);
   });
   renderTabNav();
+  updateBackgroundMode(tab === "studio" || tab === "office" ? "plain" : "photo");
   if (tab === "studio") renderStudio();
   if (tab === "office") renderOffice();
   else stopOffice();
@@ -789,7 +799,7 @@ function renderSeason(episodes) {
     li.className = "season-item";
     li.innerHTML = `
       <span class="ep-number">${String(ep.episode_number).padStart(2, "0")}</span>
-      <div>
+      <div class="season-item-body">
         <p class="hook">${escapeHtml(ep.hook)}</p>
         <p class="cliffhanger"><span class="cliff-label">Cliffhanger</span>${escapeHtml(ep.cliffhanger)}</p>
       </div>
