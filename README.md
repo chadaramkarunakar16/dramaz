@@ -22,7 +22,9 @@
 
 ## Demo
 
-[**▶ Watch the 2-minute demo**](media/demo.mp4) — trend scouting, the live Studio node graph, concept/season/episode generation, and the shot-by-shot AI prompts, end to end.
+https://github.com/user-attachments/assets/c91c787c-2b42-41fb-b346-3fdfa1994c80
+
+The Studio tab's live node graph, growing in real time as trends are discovered and selected. [**▶ Watch the full 2-minute demo**](media/demo.mp4) for the complete walkthrough — trend scouting, concept/season/episode generation, and the shot-by-shot AI prompts, end to end.
 
 ## The problem
 
