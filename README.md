@@ -20,6 +20,10 @@
 
 ---
 
+## Demo
+
+[**▶ Watch the 2-minute demo**](media/demo.mp4) — trend scouting, the live Studio node graph, concept/season/episode generation, and the shot-by-shot AI prompts, end to end.
+
 ## The problem
 
 Vertical micro-drama (ReelShort, DramaBox, ShortMax-style series) is one of the fastest-moving content formats on the internet — new tropes go viral and burn out within days. Writers rooms for this format are usually a solo creator juggling four very different jobs at once: trend research, story/concept design, season-arc plotting, and — the part that eats the most time — turning every single scene into a precise, structured AI image/video generation prompt that won't come out looking generic.
