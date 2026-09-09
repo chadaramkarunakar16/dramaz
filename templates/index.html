@@ -85,6 +85,14 @@
     <section class="tab-panel active studio-panel" data-tab-panel="studio">
       <div class="studio-canvas" id="studio-canvas">
         <svg class="studio-connectors" id="studio-connectors"></svg>
+        <div class="studio-world" id="studio-world"></div>
+        <div class="studio-hint">Drag the canvas to pan · Scroll to zoom · Drag a node to move it</div>
+        <div class="studio-toolbar">
+          <button type="button" id="studio-zoom-out" title="Zoom out">−</button>
+          <span id="studio-zoom-label">100%</span>
+          <button type="button" id="studio-zoom-in" title="Zoom in">+</button>
+          <button type="button" id="studio-zoom-reset" class="studio-toolbar-reset" title="Reset view">Reset</button>
+        </div>
       </div>
     </section>
 
@@ -163,7 +171,7 @@
         <div id="arc-locked-note" class="locked-note">Approve the concept above to plan the season.</div>
 
         <div id="arc-content" class="hidden">
-          <div class="season-controls">
+          <div id="season-controls" class="season-controls">
             <label for="episode-count">Episode count <span id="episode-count-value">20</span></label>
             <input type="range" id="episode-count" min="15" max="30" value="20">
           </div>
@@ -178,6 +186,14 @@
 
           <div id="season-approve-row" class="approve-row hidden">
             <button id="btn-approve-season" class="btn btn-approve">Approve Season →</button>
+          </div>
+
+          <div id="season-approved-note" class="season-complete hidden">
+            <span class="complete-icon">◆</span>
+            <div>
+              <div class="complete-title">Season approved</div>
+              <div class="complete-sub">The episode-by-episode arc is locked in — episode kits are up next.</div>
+            </div>
           </div>
         </div>
       </div>

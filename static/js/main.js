@@ -52,6 +52,7 @@ function emptyProject() {
     currentEpisodeNumber: 1,
     approvedEpisodes: [],
     scenesByEpisode: {},
+    studioNodePositions: {},
   };
 }
 
@@ -152,6 +153,7 @@ function hydrateState(loaded) {
   Object.assign(state, loaded);
   if (!Array.isArray(state.approvedEpisodes)) state.approvedEpisodes = [];
   if (!state.scenesByEpisode) state.scenesByEpisode = {};
+  if (!state.studioNodePositions) state.studioNodePositions = {};
   if (!state.activeTab) state.activeTab = "studio";
   state.busy = false;
 }
@@ -369,7 +371,25 @@ function unlockArcSection() {
    every render, so a page reload reconstructs the exact same graph.
    ============================================================ */
 
-const STUDIO_DEPTH_X = [4, 26, 50, 71, 89]; // percent-left per column (trends, trend-results, concept, season, episode)
+// Fixed-pixel layout, not percentages of the panel — percentages cram
+// every sibling into whatever height the panel happens to have, which is
+// exactly what caused nodes to overlap once there were more than a
+// handful. A pixel-sized "world" that the user pans/zooms around fixes
+// that at the source and lets nodes be dragged to any position.
+const STUDIO_NODE_W = 220;
+const STUDIO_LEAF_NODE_W = 188;
+const STUDIO_COL_STEP = 300;
+const STUDIO_ROW_H = 132;
+const STUDIO_MARGIN = 56;
+const STUDIO_ZOOM_MIN = 0.35;
+const STUDIO_ZOOM_MAX = 1.75;
+
+let studioPan = { x: 40, y: 40 };
+let studioZoom = 1;
+let studioViewInitialized = false;
+let studioUserAdjustedView = false;
+let lastStudioNodeIds = "";
+let lastStudioEdges = [];
 
 function studioTrendsMeta() {
   const status = state.stepStatus.trends;
@@ -465,6 +485,22 @@ function buildStudioGraph() {
       meta: studioEpisodeMeta(),
     });
     edges.push({ from: "season", to: "episode", lit: true, flowing: state.stepStatus.episode === "active" });
+
+    // One leaf node per approved episode, attached to Episode Director —
+    // the running record of exactly which episodes are actually done.
+    state.approvedEpisodes.forEach((num) => {
+      const id = `episode-${num}`;
+      nodes.push({
+        id,
+        depth: 5,
+        kind: "episode-result",
+        episodeNumber: num,
+        title: `Episode ${num}`,
+        sub: "Scene kit approved",
+        meta: "Complete",
+      });
+      edges.push({ from: "episode", to: id, lit: true });
+    });
   }
 
   return { nodes, edges };
@@ -474,33 +510,225 @@ function studioNodeTargetTab(kind) {
   return kind === "trend-result" ? "trends" : stepToTab(kind);
 }
 
-function renderStudioGraph() {
-  const canvas = document.getElementById("studio-canvas");
-  if (!canvas) return;
-  const { nodes, edges } = buildStudioGraph();
-
-  // Even vertical spacing among siblings that share a column (depth).
+// Default column/row layout in world pixels, then manual drag overrides
+// (persisted per-node in state.studioNodePositions) win over the default.
+function layoutStudioNodes(nodes) {
   const byDepth = {};
   nodes.forEach((n) => (byDepth[n.depth] = byDepth[n.depth] || []).push(n));
+  const maxCount = Math.max(1, ...Object.values(byDepth).map((g) => g.length));
+  const worldHeight = Math.max(STUDIO_MARGIN * 2 + maxCount * STUDIO_ROW_H, 460);
+
   Object.values(byDepth).forEach((group) => {
-    group.forEach((n, i) => (n.top = ((i + 1) / (group.length + 1)) * 100));
+    const colOffset = Math.max(STUDIO_MARGIN, (worldHeight - group.length * STUDIO_ROW_H) / 2);
+    group.forEach((n, i) => {
+      const defaultX = STUDIO_MARGIN + n.depth * STUDIO_COL_STEP;
+      const defaultY = colOffset + i * STUDIO_ROW_H;
+      const override = state.studioNodePositions[n.id];
+      n.x = override ? override.x : defaultX;
+      n.y = override ? override.y : defaultY;
+    });
   });
 
-  canvas.querySelectorAll(".studio-node").forEach((el) => el.remove());
+  const maxDepth = Math.max(...nodes.map((n) => n.depth));
+  const nodeW = maxDepth >= 1 ? STUDIO_LEAF_NODE_W : STUDIO_NODE_W;
+  const worldWidth = STUDIO_MARGIN * 2 + maxDepth * STUDIO_COL_STEP + Math.max(STUDIO_NODE_W, nodeW);
+  return { worldWidth, worldHeight };
+}
+
+function applyStudioTransform() {
+  const world = document.getElementById("studio-world");
+  if (!world) return;
+  world.style.transform = `translate(${studioPan.x}px, ${studioPan.y}px) scale(${studioZoom})`;
+}
+
+function updateStudioZoomLabel() {
+  const label = document.getElementById("studio-zoom-label");
+  if (label) label.textContent = `${Math.round(studioZoom * 100)}%`;
+}
+
+function fitStudioView() {
+  const canvas = document.getElementById("studio-canvas");
+  const world = document.getElementById("studio-world");
+  if (!canvas || !world) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  const ww = parseFloat(world.style.width) || 1;
+  const wh = parseFloat(world.style.height) || 1;
+  if (canvasRect.width === 0 || canvasRect.height === 0) return;
+  const zoom = Math.min(1, (canvasRect.width - 40) / ww, (canvasRect.height - 40) / wh);
+  studioZoom = Math.max(STUDIO_ZOOM_MIN, Math.min(1, zoom));
+  studioPan.x = (canvasRect.width - ww * studioZoom) / 2;
+  studioPan.y = (canvasRect.height - wh * studioZoom) / 2;
+  applyStudioTransform();
+  updateStudioZoomLabel();
+}
+
+function resetStudioView() {
+  studioUserAdjustedView = false;
+  fitStudioView();
+  requestAnimationFrame(() => drawConnectors());
+}
+
+function zoomStudioAt(cx, cy, newZoomRaw) {
+  const newZoom = Math.min(STUDIO_ZOOM_MAX, Math.max(STUDIO_ZOOM_MIN, newZoomRaw));
+  const worldX = (cx - studioPan.x) / studioZoom;
+  const worldY = (cy - studioPan.y) / studioZoom;
+  studioPan.x = cx - worldX * newZoom;
+  studioPan.y = cy - worldY * newZoom;
+  studioZoom = newZoom;
+  studioUserAdjustedView = true;
+  applyStudioTransform();
+  updateStudioZoomLabel();
+  requestAnimationFrame(() => drawConnectors());
+}
+
+function studioZoomStep(factor) {
+  const canvas = document.getElementById("studio-canvas");
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  zoomStudioAt(rect.width / 2, rect.height / 2, studioZoom * factor);
+}
+
+// Pan the canvas by dragging its empty background; nodes stop this via
+// stopPropagation in their own pointerdown handler so the two gestures
+// never fight each other.
+function attachStudioCanvasInteractions() {
+  const canvas = document.getElementById("studio-canvas");
+  if (!canvas || canvas.dataset.wired) return;
+  canvas.dataset.wired = "1";
+
+  let panning = false;
+  let startX = 0, startY = 0, startPan = { x: 0, y: 0 };
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest(".studio-toolbar")) return;
+    panning = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startPan = { x: studioPan.x, y: studioPan.y };
+    canvas.classList.add("panning");
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!panning) return;
+    studioPan.x = startPan.x + (e.clientX - startX);
+    studioPan.y = startPan.y + (e.clientY - startY);
+    studioUserAdjustedView = true;
+    applyStudioTransform();
+    drawConnectors();
+  });
+
+  ["pointerup", "pointercancel"].forEach((evt) => {
+    canvas.addEventListener(evt, (e) => {
+      if (!panning) return;
+      panning = false;
+      canvas.classList.remove("panning");
+      try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    });
+  });
+
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      zoomStudioAt(e.clientX - rect.left, e.clientY - rect.top, studioZoom * factor);
+    },
+    { passive: false }
+  );
+
+  document.getElementById("studio-zoom-in")?.addEventListener("click", () => studioZoomStep(1.25));
+  document.getElementById("studio-zoom-out")?.addEventListener("click", () => studioZoomStep(0.8));
+  document.getElementById("studio-zoom-reset")?.addEventListener("click", resetStudioView);
+}
+
+// Distinguishes a click (navigate) from a drag (reposition + persist) by
+// distance moved, since both start from the same pointerdown.
+function attachStudioNodeDrag(el, n) {
+  let dragging = false;
+  let moved = false;
+  let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    dragging = true;
+    moved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = n.x;
+    startTop = n.y;
+    el.classList.add("dragging");
+    el.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+
+  el.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = (e.clientX - startX) / studioZoom;
+    const dy = (e.clientY - startY) / studioZoom;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (moved) {
+      n.x = startLeft + dx;
+      n.y = startTop + dy;
+      el.style.left = `${n.x}px`;
+      el.style.top = `${n.y}px`;
+      drawConnectors();
+    }
+    e.stopPropagation();
+  });
+
+  el.addEventListener("pointerup", (e) => {
+    if (!dragging) return;
+    dragging = false;
+    el.classList.remove("dragging");
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+    e.stopPropagation();
+    if (moved) {
+      state.studioNodePositions[n.id] = { x: n.x, y: n.y };
+      persist();
+    } else {
+      if (n.kind === "episode-result") {
+        viewEpisode(n.episodeNumber);
+        goToTab("episodes");
+      } else {
+        goToTab(studioNodeTargetTab(n.kind));
+      }
+    }
+  });
+}
+
+function renderStudioGraph() {
+  const canvas = document.getElementById("studio-canvas");
+  const world = document.getElementById("studio-world");
+  if (!canvas || !world) return;
+  attachStudioCanvasInteractions();
+
+  const { nodes, edges } = buildStudioGraph();
+  const nodeIdKey = nodes.map((n) => n.id).sort().join(",");
+  const structureChanged = nodeIdKey !== lastStudioNodeIds;
+  lastStudioNodeIds = nodeIdKey;
+
+  const { worldWidth, worldHeight } = layoutStudioNodes(nodes);
+  world.style.width = `${worldWidth}px`;
+  world.style.height = `${worldHeight}px`;
+  applyStudioTransform();
+
+  world.querySelectorAll(".studio-node").forEach((el) => el.remove());
 
   nodes.forEach((n) => {
     const el = document.createElement("div");
     el.className = "studio-node";
     el.dataset.nodeId = n.id;
-    if (n.kind === "trend-result") {
-      el.classList.add("trend-result-node");
+    if (n.kind === "trend-result" || n.kind === "episode-result") {
+      el.classList.add(n.kind === "trend-result" ? "trend-result-node" : "episode-result-node");
       if (n.selected) el.classList.add("selected");
     } else {
       if (n.status === "active") el.classList.add("active");
       if (n.status === "complete") el.classList.add("complete");
     }
-    el.style.left = `${STUDIO_DEPTH_X[n.depth]}%`;
-    el.style.top = `${n.top}%`;
+    el.style.left = `${n.x}px`;
+    el.style.top = `${n.y}px`;
 
     const hasIn = n.depth > 0;
     const hasOut = edges.some((e) => e.from === n.id);
@@ -514,14 +742,17 @@ function renderStudioGraph() {
       <p class="node-sub">${escapeHtml(n.sub || "")}</p>
       <p class="node-meta">${escapeHtml(n.meta || "")}</p>
     `;
-    el.addEventListener("click", () => goToTab(studioNodeTargetTab(n.kind)));
-    canvas.appendChild(el);
+    attachStudioNodeDrag(el, n);
+    world.appendChild(el);
   });
 
   requestAnimationFrame(() => drawConnectors(edges));
-}
 
-let lastStudioEdges = [];
+  if (!studioViewInitialized || (structureChanged && !studioUserAdjustedView)) {
+    studioViewInitialized = true;
+    requestAnimationFrame(fitStudioView);
+  }
+}
 
 function drawConnectors(edges) {
   if (edges) lastStudioEdges = edges;
@@ -635,14 +866,11 @@ function rehydratePanels() {
   if (state.season && state.season.length) {
     renderSeason(state.season);
     populateEpisodeSelect(state.season);
-    seasonRefineRow.classList.remove("hidden");
-    seasonApproveRow.classList.remove("hidden");
   } else {
     seasonList.innerHTML = "";
     episodeSelect.innerHTML = "";
-    seasonRefineRow.classList.add("hidden");
-    seasonApproveRow.classList.add("hidden");
   }
+  syncSeasonApprovalUI();
 
   seasonCompleteBanner.classList.add("hidden");
   episodeApproveRow.classList.add("hidden");
@@ -756,7 +984,7 @@ btnScout.addEventListener("click", scoutTrends);
 btnResearchTrends.addEventListener("click", scoutTrends);
 
 btnApproveTrends.addEventListener("click", () => {
-  if (state.busy || state.selectedTrends.length === 0) return;
+  if (state.busy || state.selectedTrends.length === 0 || state.stepStatus.trends === "complete") return;
   setStepStatus("trends", "complete");
   setStepStatus("concept", "active");
   state.currentStep = "concept";
@@ -853,7 +1081,7 @@ function renderConcept(concept) {
 btnResearchConcept.addEventListener("click", generateConcept);
 
 btnApproveConcept.addEventListener("click", () => {
-  if (state.busy) return;
+  if (state.busy || state.stepStatus.concept === "complete") return;
   setStepStatus("concept", "complete");
   setStepStatus("season", "active");
   state.currentStep = "season";
@@ -866,6 +1094,7 @@ btnApproveConcept.addEventListener("click", () => {
 
 const episodeCountInput = document.getElementById("episode-count");
 const episodeCountValue = document.getElementById("episode-count-value");
+const seasonControls = document.getElementById("season-controls");
 const btnSeasonLoading = document.getElementById("season-loading");
 const seasonList = document.getElementById("season-list");
 const seasonRefineRow = document.getElementById("season-refine-row");
@@ -873,6 +1102,26 @@ const seasonRefineInput = document.getElementById("season-refine-input");
 const btnResearchSeason = document.getElementById("btn-research-season");
 const seasonApproveRow = document.getElementById("season-approve-row");
 const btnApproveSeason = document.getElementById("btn-approve-season");
+const seasonApprovedNote = document.getElementById("season-approved-note");
+
+// Once the season is approved, editing the episode count or re-approving
+// makes no sense — and having both an "editable" slider and an "approve"
+// button still showing next to the now-locked list is exactly the
+// cluttered, ambiguous layout that reads as things overlapping. Swap them
+// for a single clear confirmation instead.
+function syncSeasonApprovalUI() {
+  const approved = state.stepStatus.season === "complete";
+  seasonControls.classList.toggle("locked", approved);
+  episodeCountInput.disabled = approved;
+  seasonApprovedNote.classList.toggle("hidden", !approved);
+  if (approved) {
+    seasonRefineRow.classList.add("hidden");
+    seasonApproveRow.classList.add("hidden");
+  } else if (state.season && state.season.length) {
+    seasonRefineRow.classList.remove("hidden");
+    seasonApproveRow.classList.remove("hidden");
+  }
+}
 
 episodeCountInput.addEventListener("input", () => {
   episodeCountValue.textContent = episodeCountInput.value;
@@ -932,9 +1181,10 @@ function renderSeason(episodes) {
 btnResearchSeason.addEventListener("click", generateSeason);
 
 btnApproveSeason.addEventListener("click", () => {
-  if (state.busy) return;
+  if (state.busy || state.stepStatus.season === "complete") return;
   setStepStatus("season", "complete");
   setStepStatus("episode", "active");
+  syncSeasonApprovalUI();
   populateEpisodeSelect(state.season);
   state.currentEpisodeNumber = 1;
   state.approvedEpisodes = [];
@@ -1019,6 +1269,31 @@ async function generateEpisode(episodeNumber) {
       episodeLoading.classList.add("hidden");
     }
   });
+}
+
+// Jumping to an already-generated episode (e.g. from a Studio node) should
+// just display what was already built, not burn another API call.
+function viewEpisode(episodeNumber) {
+  const scenes = state.scenesByEpisode[episodeNumber];
+  if (!scenes) {
+    generateEpisode(episodeNumber);
+    return;
+  }
+  state.currentEpisodeNumber = episodeNumber;
+  episodeSelect.value = episodeNumber;
+  renderEpisodeProgress();
+  renderScenes(scenes);
+  seasonCompleteBanner.classList.toggle("hidden", state.stepStatus.episode !== "complete");
+  if (state.stepStatus.episode !== "complete") {
+    episodeRefineRow.classList.remove("hidden");
+    episodeApproveRow.classList.remove("hidden");
+    btnApproveEpisode.textContent =
+      episodeNumber < state.episodeCount ? "Approve & Next Episode →" : "Approve & Finish Season →";
+  } else {
+    episodeRefineRow.classList.add("hidden");
+    episodeApproveRow.classList.add("hidden");
+  }
+  persist();
 }
 
 function renderScenes(scenes) {
